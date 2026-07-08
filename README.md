@@ -35,6 +35,8 @@ Notes:
 | Skill | `testing-qa` | Test strategy, framework commands, flaky-test handling, coverage discipline |
 | Skill | `token-saver` | Hard rules that cut token spend on every task |
 | Skill | `tech-radar` | "Engineer mind": verify-before-use habit, syntax/version drift detection, learning log |
+| Skill | `prd-writer` | Idea → build-ready PRD: stories, acceptance criteria, M0 slice |
+| Skill | `web-perf` | Core Web Vitals, bundle budgets, FPS — measure-first client performance |
 | Agent | `ui-designer` | Frontend + design specialist |
 | Agent | `backend-engineer` | Polyglot backend specialist |
 | Agent | `bug-fixer` | Ticket-driven minimal-diff patcher |
@@ -42,9 +44,13 @@ Notes:
 | Agent | `code-reviewer` | Review gate before merge |
 | Agent | `release-manager` | Versioning, changelog, deploy checklist |
 | Agent | `tech-scout` | Researches new tech/syntax changes, updates the learning log |
+| Agent | `security-auditor` | Deep security sweep before releases (secrets, injection, authz, deps) |
+| Agent | `docs-writer` | READMEs, API docs, ADRs — derived from code, commands verified |
 | Command | `/fix-ticket` | End-to-end ticket resolution pipeline |
 | Command | `/ship` | Pre-release pipeline: test → review → changelog → tag |
 | Command | `/ui-audit` | Audit a screen/component against the UI/UX skill |
+| Command | `/standup` | Daily summary: shipped, in flight, blocked, next actions |
+| Command | `/new-feature` | Idea → PRD → build → test → review, end to end |
 | Hooks | see `hooks/` | Auto-format on edit, block dangerous commands, context-size warning, dashboard logger |
 | Dashboard | `dashboard/index.html` | 3D rotatable skill tree with physics, changelog, token-savings stats |
 
@@ -52,8 +58,10 @@ Notes:
 
 Open `dashboard/index.html` directly in any browser (no server needed).
 - Drag to rotate the 3D tree, scroll to zoom; click a foliage cloud (or a legend chip) to fly into that group — skills, agents, hooks, commands each grow on their own cluster.
+- Search box (top-left): type a name and press Enter — the camera flies to the matching apple and opens its summary.
 - Each fruit = a skill/agent/hook. Click one → details popup → Remove (with confirmation) → apple falls with gravity and fades.
-- Theme dial at the bottom: Lavender Dawn / Champagne Pink / Sage Green.
+- Dark bioluminescent theme: the tree glows in the dark (additive particle foliage, canopy lights, fireflies).
+- Mobile-friendly: one finger rotates, two fingers pinch-zoom, panel becomes a full-screen slide-over.
 - Side panel: changelog of what was done, new additions, and tokens saved (animated counters).
 - To add entries, edit `dashboard/data.js` — the format is documented at the top of that file. The `session-logger` hook shows how to append automatically.
 
