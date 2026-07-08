@@ -81,7 +81,11 @@
   #popup h3{font-size:15px;margin:3px 0 4px;letter-spacing:-.01em}
   #popup p{font-size:12px;color:var(--muted)}
   #popup .added{font-size:11px;color:var(--muted);margin-top:6px}
-  #popup .actions{display:flex;gap:8px;margin-top:12px}
+  #popup .actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  #pFile{display:none;max-height:240px;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-top:10px;
+    font:11px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;background:rgba(0,0,0,.35);
+    border:1px solid var(--border);border-radius:10px;padding:10px 12px;white-space:pre-wrap;word-break:break-word}
+  #pFile.show{display:block;animation:rise .3s cubic-bezier(.16,1,.3,1)}
   #popup .confirm{display:none;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
   #popup.confirming .confirm{display:block}
   #popup.confirming .actions{display:none}
@@ -122,6 +126,10 @@
     #resetView{top:96px;left:16px}
     #modeBadge{bottom:auto;top:56px;font-size:11px;padding:5px 12px;width:max-content;max-width:92vw}
     #toast{bottom:auto;top:96px}
+    /* whole sheet scrolls on touch (not just the changelog) */
+    #panel{display:block;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+    #changelog{flex:none;overflow:visible;height:auto}
+    #pFile{max-height:180px}
   }
 </style>
 </head>
@@ -146,9 +154,12 @@
     <p id="pDesc"></p>
     <div class="added" id="pAdded"></div>
     <div class="actions">
+      <button class="btn" id="pView">📄 View file</button>
+      <button class="btn" id="pDownload">⬇ Download</button>
       <button class="btn danger" id="pRemove">Remove</button>
       <button class="btn" id="pClose">Close</button>
     </div>
+    <pre id="pFile"></pre>
     <div class="confirm">
       <p>Remove this from the tree? It will fall like an apple. 🍎</p>
       <button class="btn danger" id="pConfirmYes">Yes, drop it</button>
@@ -159,6 +170,7 @@
   <div id="changelog"></div>
   <div class="panel-foot">
     <button class="btn" id="restoreBtn">↺ Restore removed</button>
+    <button class="btn" id="zipBtn">⬇ Toolkit .zip</button>
   </div>
 </aside>
 <button id="panelToggle" title="Toggle panel">☰</button>
@@ -468,6 +480,8 @@ const popup=document.getElementById("popup");
 let popupNode=null;
 container.addEventListener("click",e=>{
   if(Math.abs(e.clientX-downX)>4||Math.abs(e.clientY-downY)>4) return;
+  // set pick coords from the tap itself (touch never fires hover moves)
+  mouse.x=(e.clientX/innerWidth)*2-1; mouse.y=-(e.clientY/innerHeight)*2+1;
   ray.setFromCamera(mouse,camera);
   const fhits=ray.intersectObjects(fruitGroup.children);
   if(fhits.length){ openPopup(fhits[0].object.userData.node,e.clientX,e.clientY); return; }
@@ -483,6 +497,7 @@ function openPopup(node,x,y){
   document.getElementById("pDesc").textContent=node.desc||"";
   document.getElementById("pAdded").textContent="Added "+node.added;
   document.getElementById("pRemove").style.display=IS_LOCAL?"":"none";
+  document.getElementById("pFile").classList.remove("show");
   popup.classList.remove("confirming");
   // summary lives in the right panel — make sure it's open
   document.getElementById("panel").classList.remove("hidden");
@@ -491,6 +506,45 @@ function openPopup(node,x,y){
 }
 function closePopup(){ popup.classList.remove("show","confirming"); popupNode=null; }
 document.getElementById("pClose").onclick=closePopup;
+
+/* ── File view & download ── */
+const CFG=DATA.config||{};
+const rawUrl=p=>CFG.repoBase?CFG.repoBase.replace(/\/$/,"").replace("github.com","raw.githubusercontent.com")+"/main/"+p.replace(/^\.\.\//,""):null;
+async function fetchFile(node){
+  if(!node.file) throw new Error("no file");
+  try{ const r=await fetch(node.file); if(r.ok) return await r.text(); }catch(e){}
+  const u=rawUrl(node.file);
+  if(u){ const r=await fetch(u); if(r.ok) return await r.text(); }
+  throw new Error("unreachable");
+}
+document.getElementById("pView").onclick=async()=>{
+  const pre=document.getElementById("pFile");
+  if(pre.classList.contains("show")){ pre.classList.remove("show"); return; }
+  if(!popupNode) return;
+  pre.textContent="Loading…"; pre.classList.add("show");
+  try{ pre.textContent=await fetchFile(popupNode); }
+  catch(e){ pre.textContent=(popupNode.desc||"")+"\n\n⚠ Full file can't be read from file:// directly.\nOptions: run a local server (npx serve) · open the hosted site · or set config.repoBase in data.js."; }
+};
+document.getElementById("pDownload").onclick=async()=>{
+  if(!popupNode||!popupNode.file){ toast("No file linked for this item"); return; }
+  try{
+    const txt=await fetchFile(popupNode);
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([txt],{type:"text/markdown"}));
+    a.download=popupNode.file.split("/").pop(); a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    toast("⬇ "+a.download+" downloaded");
+  }catch(e){
+    const u=rawUrl(popupNode.file);
+    if(u) open(u,"_blank");
+    else toast("Set config.repoBase in data.js (or use the hosted site) to download");
+  }
+};
+document.getElementById("zipBtn").onclick=()=>{
+  if(CFG.repoBase) open(CFG.repoBase.replace(/\/$/,"")+"/archive/refs/heads/main.zip","_blank");
+  else toast("Set config.repoBase in data.js to enable the .zip download");
+};
+
 document.getElementById("pRemove").onclick=()=>popup.classList.add("confirming");
 document.getElementById("pConfirmNo").onclick=()=>popup.classList.remove("confirming");
 document.getElementById("pConfirmYes").onclick=()=>{ if(popupNode) dropFruit(popupNode); closePopup(); };
