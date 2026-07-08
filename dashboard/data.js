@@ -44,6 +44,7 @@ window.SKILL_TREE_DATA = {
     { id: "cmd-newfeature",  name: "/new-feature",     category: "command", added: "2026-07-08", desc: "Idea → PRD → build → test → review, end to end.", file: "../commands/new-feature.md" }
   ],
   changelog: [
+    { date: "2026-07-08", title: "Capability pack", detail: "Deep links (#item=...), keyboard shortcuts (/, Esc, P), copy-to-clipboard, changelog filters, tokens sparkline, tree level. Mobile: tap-outside hides the sheet.", tokensSaved: 0, type: "feature" },
     { date: "2026-07-08", title: "File viewer & downloads", detail: "View full skill/agent files and download them from the tree; toolkit .zip button; mobile scroll & tap fixes.", tokensSaved: 0, type: "feature" },
     { date: "2026-07-08", title: "Impact pack added", detail: "prd-writer & web-perf skills, security-auditor & docs-writer agents, /standup & /new-feature commands, fruit search on the tree.", tokensSaved: 0, type: "feature" },
     { date: "2026-07-08", title: "Toolkit created", detail: "8 skills, 7 agents, 3 hooks, 3 commands installed; 3D dashboard launched.", tokensSaved: 0, type: "feature" },
