@@ -101,6 +101,13 @@ export class SkillTreeScene {
   private lookCur = new THREE.Vector3(0, 4.4, 0);
   private lookTarget = new THREE.Vector3(0, 4.4, 0);
   private focusedCat: ItemKind | null = null;
+  private freeNav = false;
+
+  /** Center-lock off → drag pans, idle auto-spin stops (free navigation). */
+  setFreeNavigation(on: boolean) {
+    this.freeNav = on;
+    if (!on) this.resetView();
+  }
 
   // input state
   private dragging = false;
@@ -620,13 +627,15 @@ export class SkillTreeScene {
     let pinchDist = 0;
     const ROT = 0.006;
 
+    let panning = false;
     const onDown = (e: PointerEvent) => {
       ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+      panning = this.freeNav && (e.button === 2 || e.shiftKey);
       if (ptrs.size === 2) {
         const [a, b] = [...ptrs.values()];
         pinchDist = Math.hypot(a![0] - b![0], a![1] - b![1]);
         this.dragging = false;
-      } else this.dragging = true;
+      } else this.dragging = !panning;
       this.lastX = this.downX = e.clientX;
       this.lastY = this.downY = e.clientY;
       this.lastInteract = performance.now();
@@ -638,6 +647,16 @@ export class SkillTreeScene {
         const d = Math.hypot(a![0] - b![0], a![1] - b![1]);
         if (pinchDist > 0 && d > 0) this.targetDist = Math.min(38, Math.max(3.2, this.targetDist * (pinchDist / d)));
         pinchDist = d;
+        this.lastInteract = performance.now();
+      } else if (panning) {
+        // free-nav: pan the look target across the view plane
+        const dx = (e.clientX - this.lastX) * this.dist * 0.0016;
+        const dy = (e.clientY - this.lastY) * this.dist * 0.0016;
+        const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrix, 0);
+        const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrix, 1);
+        this.lookTarget.addScaledVector(right, -dx).addScaledVector(up, dy);
+        this.lastX = e.clientX;
+        this.lastY = e.clientY;
         this.lastInteract = performance.now();
       } else if (this.dragging) {
         this.targetTheta += (e.clientX - this.lastX) * ROT;
@@ -653,8 +672,12 @@ export class SkillTreeScene {
     const onUp = (e: PointerEvent) => {
       ptrs.delete(e.pointerId);
       if (ptrs.size < 2) pinchDist = 0;
-      if (!ptrs.size) this.dragging = false;
+      if (!ptrs.size) {
+        this.dragging = false;
+        panning = false;
+      }
     };
+    const onContext = (e: Event) => this.freeNav && e.preventDefault();
     const onWheel = (e: WheelEvent) => {
       this.targetDist = Math.min(38, Math.max(3.2, this.targetDist + e.deltaY * 0.012));
       this.lastInteract = performance.now();
@@ -699,6 +722,7 @@ export class SkillTreeScene {
     el.addEventListener("wheel", onWheel, { passive: true });
     el.addEventListener("click", onClick);
     el.addEventListener("dblclick", onDblClick);
+    el.addEventListener("contextmenu", onContext);
     const ro = new ResizeObserver(onResize);
     ro.observe(el);
     this.cleanups.push(() => {
@@ -708,6 +732,7 @@ export class SkillTreeScene {
       window.removeEventListener("pointercancel", onUp);
       el.removeEventListener("wheel", onWheel);
       el.removeEventListener("click", onClick);
+      el.removeEventListener("contextmenu", onContext);
       el.removeEventListener("dblclick", onDblClick);
       ro.disconnect();
     });
@@ -794,7 +819,8 @@ export class SkillTreeScene {
     this.raf = requestAnimationFrame(this.animate);
     const dt = Math.min(this.clock.getDelta(), 0.05);
     const t = this.clock.elapsedTime;
-    if (!this.dragging && performance.now() - this.lastInteract > 3500 && !this.focusedCat) this.targetTheta += 0.1 * dt;
+    if (!this.dragging && !this.freeNav && performance.now() - this.lastInteract > 3500 && !this.focusedCat)
+      this.targetTheta += 0.1 * dt;
     this.applyCamera();
 
     const now = performance.now();

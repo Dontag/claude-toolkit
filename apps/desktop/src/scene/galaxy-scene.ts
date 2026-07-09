@@ -155,6 +155,26 @@ function planetTextures(kindColor: number, seed: number): { map: THREE.CanvasTex
 
 let seedCounter = 1;
 
+/** Accretion-disk texture: a bright hot ring fading in and out radially. */
+function accretionTexture(): THREE.CanvasTexture {
+  const S = 256;
+  const c = document.createElement("canvas");
+  c.width = c.height = S;
+  const x = c.getContext("2d")!;
+  const g = x.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+  g.addColorStop(0.0, "rgba(0,0,0,0)");
+  g.addColorStop(0.42, "rgba(0,0,0,0)");
+  g.addColorStop(0.52, "rgba(255,240,210,0.95)"); // hot inner edge
+  g.addColorStop(0.6, "rgba(255,180,90,0.8)");
+  g.addColorStop(0.75, "rgba(220,120,60,0.4)");
+  g.addColorStop(1.0, "rgba(120,60,40,0)");
+  x.fillStyle = g;
+  x.fillRect(0, 0, S, S);
+  const t = new THREE.CanvasTexture(c);
+  t.minFilter = THREE.LinearFilter;
+  return t;
+}
+
 export class GalaxyScene {
   private renderer!: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
@@ -188,8 +208,20 @@ export class GalaxyScene {
   private mouse = new THREE.Vector2(-2, -2);
   private hovered: Planet | null = null;
   private cleanups: Array<() => void> = [];
+  // free navigation: when off (default) the camera is center-locked and idle-
+  // spins; when on, drag pans the focus so you can fly around the galaxy
+  private freeNav = false;
+  private center = new THREE.Vector3();
+  private panTarget = new THREE.Vector3();
+  private accretion?: THREE.Mesh;
+  private blackHole = new THREE.Group();
 
   constructor(private cb: GalaxySceneCallbacks = {}) {}
+
+  setFreeNavigation(on: boolean) {
+    this.freeNav = on;
+    if (!on) this.panTarget.set(0, 0, 0); // re-center on lock
+  }
 
   mount(el: HTMLElement) {
     this.container = el;
@@ -260,21 +292,48 @@ export class GalaxyScene {
     );
     this.disc.position.y = -4;
     this.world.add(this.disc);
+    this.buildBlackHole();
+  }
 
-    // a warm glow sprite sitting in the galactic core
-    const coreGlow = new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map: this.glowTex,
-        color: 0xffa860,
+  /* ── Supermassive black hole at the galactic centre (ref image) ── */
+  private buildBlackHole() {
+    const bh = this.blackHole;
+    bh.position.set(0, -3, 0);
+    // event horizon: pure black sphere
+    const horizon = new THREE.Mesh(
+      new THREE.SphereGeometry(3.2, 32, 24),
+      new THREE.MeshBasicMaterial({ color: 0x000000 }),
+    );
+    bh.add(horizon);
+    // accretion disk: a large flat ring, slightly tilted, additive
+    const disk = new THREE.Mesh(
+      new THREE.RingGeometry(3.4, 12, 96, 1),
+      new THREE.MeshBasicMaterial({
+        map: accretionTexture(),
         transparent: true,
-        opacity: 0.5,
+        opacity: 0.95,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
+        side: THREE.DoubleSide,
       }),
     );
-    coreGlow.scale.set(48, 48, 1);
-    coreGlow.position.y = -3;
-    this.world.add(coreGlow);
+    disk.rotation.x = Math.PI / 2 - 0.32; // tilt so we see it edge-on-ish
+    bh.add(disk);
+    this.accretion = disk;
+    // photon ring: bright thin torus hugging the horizon (lensing halo)
+    const photon = new THREE.Mesh(
+      new THREE.TorusGeometry(3.35, 0.09, 12, 96),
+      new THREE.MeshBasicMaterial({ color: 0xfff0d0, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    photon.rotation.x = Math.PI / 2 - 0.32;
+    bh.add(photon);
+    // soft warm bloom behind it
+    const bloom = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffb070, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    bloom.scale.set(30, 30, 1);
+    bh.add(bloom);
+    this.world.add(bh);
   }
 
   private buildNebulae() {
@@ -299,6 +358,36 @@ export class GalaxyScene {
     }
   }
 
+  /** Seeded, non-overlapping system slots; galaxy area grows with the count. */
+  private placeSystems(ownerIds: string[], n: number): Map<string, THREE.Vector3> {
+    const CLEAR = 12; // min centre-to-centre distance between systems
+    const CORE = 16; // keep clear of the black hole
+    // ring capacity ~ 2πr / CLEAR, so the reach scales with how many fit
+    const reach = CORE + Math.max(10, Math.sqrt(n) * 14);
+    const placed: THREE.Vector3[] = [];
+    const out = new Map<string, THREE.Vector3>();
+    for (const id of ownerIds) {
+      let s = 0;
+      for (let k = 0; k < id.length; k++) s = (s * 31 + id.charCodeAt(k)) >>> 0;
+      const rnd = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+      const ang = rnd() * Math.PI * 2;
+      let r = CORE + rnd() * (reach - CORE);
+      const y = 1 + (rnd() - 0.5) * 10;
+      let p = new THREE.Vector3(Math.cos(ang) * r, y, Math.sin(ang) * r);
+      // push outward (with a little angular jitter) until it clears its peers
+      let tries = 0;
+      while (placed.some((q) => q.distanceTo(p) < CLEAR) && tries < 200) {
+        r += CLEAR * 0.6;
+        const a = ang + (rnd() - 0.5) * 0.5;
+        p = new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r);
+        tries++;
+      }
+      placed.push(p);
+      out.set(id, p);
+    }
+    return out;
+  }
+
   /* ── Solar systems ── */
   setItems(items: GalaxyItem[]) {
     for (const s of this.systems) {
@@ -321,13 +410,15 @@ export class GalaxyScene {
     }
     const n = owners.size;
     const now = performance.now();
+    // Random, non-overlapping placement: each system's slot is seeded from its
+    // ownerId (stable across renders), then nudged outward until it clears every
+    // already-placed system. The galaxy's usable radius grows with user count,
+    // and the black hole's core zone (< 16) is kept clear.
+    const positions = this.placeSystems([...owners.keys()], n);
     let idx = 0;
     for (const [ownerId, ownerItems] of owners) {
       const group = new THREE.Group();
-      // place systems along a spiral arm of the galaxy
-      const ang = idx * 2.399963 + 0.6;
-      const rad = n === 1 ? 0 : 10 + Math.sqrt(idx) * 9;
-      group.position.set(Math.cos(ang) * rad, 1.5 + Math.sin(idx * 1.3) * 4, Math.sin(ang) * rad);
+      group.position.copy(positions.get(ownerId)!);
       const col = userColor(ownerId);
       // new system → grow in from nothing
       const sysBorn = this.knownOwners.has(ownerId) ? 0 : now;
@@ -425,8 +516,8 @@ export class GalaxyScene {
     // remember what exists now so the next update only grows in truly-new things
     this.knownOwners = new Set(owners.keys());
     this.knownItems = new Set(items.map((i) => i.id));
-    // the galaxy frames itself as it grows
-    this.targetDist = Math.max(20, 16 + Math.sqrt(n) * 8);
+    // frame the whole galaxy as it expands (unless the user is navigating freely)
+    if (!this.freeNav) this.targetDist = Math.max(24, 22 + Math.sqrt(n) * 10);
   }
 
   private makeDust(color: number): THREE.Points {
@@ -481,13 +572,25 @@ export class GalaxyScene {
   }
 
   private bindInput(el: HTMLElement) {
+    let panning = false;
     const onDown = (e: PointerEvent) => {
-      this.dragging = true;
+      // free-nav: right-button or shift+left pans; otherwise orbit
+      panning = this.freeNav && (e.button === 2 || e.shiftKey);
+      this.dragging = !panning;
       this.lastX = this.downX = e.clientX;
       this.lastY = this.downY = e.clientY;
     };
     const onMove = (e: PointerEvent) => {
-      if (this.dragging) {
+      if (panning) {
+        // move the focus point across the view plane
+        const dx = (e.clientX - this.lastX) * this.dist * 0.0015;
+        const dy = (e.clientY - this.lastY) * this.dist * 0.0015;
+        const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrix, 0);
+        const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrix, 1);
+        this.panTarget.addScaledVector(right, -dx).addScaledVector(up, dy);
+        this.lastX = e.clientX;
+        this.lastY = e.clientY;
+      } else if (this.dragging) {
         this.targetTheta += (e.clientX - this.lastX) * 0.006;
         this.targetPhi = Math.min(1.52, Math.max(0.15, this.targetPhi + (e.clientY - this.lastY) * 0.004));
         this.lastX = e.clientX;
@@ -497,9 +600,13 @@ export class GalaxyScene {
       this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     };
-    const onUp = () => (this.dragging = false);
+    const onUp = () => {
+      this.dragging = false;
+      panning = false;
+    };
+    const onContext = (e: Event) => this.freeNav && e.preventDefault(); // allow right-drag pan
     const onWheel = (e: WheelEvent) => {
-      this.targetDist = Math.min(160, Math.max(5, this.targetDist + e.deltaY * 0.04));
+      this.targetDist = Math.min(220, Math.max(5, this.targetDist + e.deltaY * 0.04));
     };
     const onClick = (e: MouseEvent) => {
       if (Math.abs(e.clientX - this.downX) > 4 || Math.abs(e.clientY - this.downY) > 4) return;
@@ -518,6 +625,7 @@ export class GalaxyScene {
     window.addEventListener("pointerup", onUp);
     el.addEventListener("wheel", onWheel, { passive: true });
     el.addEventListener("click", onClick);
+    el.addEventListener("contextmenu", onContext);
     const ro = new ResizeObserver(onResize);
     ro.observe(el);
     this.cleanups.push(() => {
@@ -526,6 +634,7 @@ export class GalaxyScene {
       window.removeEventListener("pointerup", onUp);
       el.removeEventListener("wheel", onWheel);
       el.removeEventListener("click", onClick);
+      el.removeEventListener("contextmenu", onContext);
       ro.disconnect();
     });
   }
@@ -550,15 +659,18 @@ export class GalaxyScene {
     this.theta += (this.targetTheta - this.theta) * 0.07;
     this.phi += (this.targetPhi - this.phi) * 0.07;
     this.dist += (this.targetDist - this.dist) * 0.07;
-    if (!this.dragging) this.targetTheta += 0.015 * dt;
+    // idle auto-spin only when center-locked (off while freely navigating)
+    if (!this.dragging && !this.freeNav) this.targetTheta += 0.015 * dt;
+    this.center.lerp(this.panTarget, 0.12);
     this.camera.position.set(
-      this.dist * Math.sin(this.phi) * Math.cos(this.theta),
-      this.dist * Math.cos(this.phi),
-      this.dist * Math.sin(this.phi) * Math.sin(this.theta),
+      this.center.x + this.dist * Math.sin(this.phi) * Math.cos(this.theta),
+      this.center.y + this.dist * Math.cos(this.phi),
+      this.center.z + this.dist * Math.sin(this.phi) * Math.sin(this.theta),
     );
-    this.camera.lookAt(0, 0, 0);
+    this.camera.lookAt(this.center);
 
     this.disc.rotation.y += dt * 0.012;
+    if (this.accretion) this.accretion.rotation.z += dt * 0.25; // swirling disk
     const nowMs = performance.now();
     const easeOut = (x: number) => 1 - Math.pow(1 - x, 3);
     for (const s of this.systems) {

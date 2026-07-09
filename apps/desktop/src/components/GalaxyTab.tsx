@@ -114,6 +114,7 @@ function GalaxyLive() {
     scene.mount(el);
     sceneRef.current = scene;
     scene.setItems(useGalaxy.getState().items);
+    scene.setFreeNavigation(useUi.getState().freeNav);
     void fetchGalaxy();
     subscribeGalaxy();
     joinGalaxyPresence();
@@ -126,9 +127,13 @@ function GalaxyLive() {
         scene.cometPulse(userColor(s.lastActivity.userId));
       }
     });
+    const unsubNav = useUi.subscribe((s, p) => {
+      if (s.freeNav !== p.freeNav) scene.setFreeNavigation(s.freeNav);
+    });
     return () => {
       unsubItems();
       unsubPresence();
+      unsubNav();
       sceneRef.current = null;
       scene.dispose();
     };

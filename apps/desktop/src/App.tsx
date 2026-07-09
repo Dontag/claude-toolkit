@@ -31,6 +31,7 @@ export default function App() {
   const mode = useInventory((s) => s.mode);
   const rootLabel = useInventory((s) => s.rootLabel);
   const count = useInventory((s) => s.items.size);
+  const freeNav = useUi((s) => s.freeNav);
   const onlineStatus = useConnection((s) => s.online);
   const searchRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
@@ -173,6 +174,15 @@ export default function App() {
           <AccessCenter />
           <AuthMenu />
         </div>
+        <button
+          className={`rounded-full border px-3 py-1 text-[11px] transition ${
+            freeNav ? "border-brand bg-brand/20 text-text" : "border-border bg-black/30 text-muted hover:border-brand hover:text-text"
+          }`}
+          title={freeNav ? "Free navigation — drag pans, right-drag/shift to pan. Click to re-center." : "Center-locked — click to navigate freely"}
+          onClick={() => useUi.getState().toggleFreeNav()}
+        >
+          {freeNav ? "🧭 Free" : "🔒 Locked"}
+        </button>
         {tab === "personal" && mode === "local" && <RefreshButton onRefresh={rescanLocal} label="Rescan" />}
         <button
           className="rounded-full border border-border bg-black/30 px-3 py-1 text-[11px] text-muted transition hover:border-brand hover:text-text"

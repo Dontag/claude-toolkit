@@ -27,12 +27,17 @@ export function TreeView() {
     scene.mount(el);
     sceneRef.current = scene;
     scene.setItems([...useInventory.getState().items.values()].map(toSceneItem));
+    scene.setFreeNavigation(useUi.getState().freeNav);
     const unsub = useInventory.subscribe((state, prev) => {
       if (state.items === prev.items) return;
       scene.syncItems([...state.items.values()].map(toSceneItem));
     });
+    const unsubNav = useUi.subscribe((s, p) => {
+      if (s.freeNav !== p.freeNav) scene.setFreeNavigation(s.freeNav);
+    });
     return () => {
       unsub();
+      unsubNav();
       sceneRef.current = null;
       scene.dispose();
     };
