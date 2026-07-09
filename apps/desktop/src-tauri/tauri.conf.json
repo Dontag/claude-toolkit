@@ -28,7 +28,7 @@
       "endpoints": [
         "https://github.com/Dontag/claude-toolkit/releases/latest/download/latest.json"
       ],
-      "pubkey": ""
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxREE1QzVDMDM0OTNCMDEKUldRQk8wa0RYRnphUWRZd0d2TURtVC9hdWlsZTRUM3J5VFlzU2pBOU5sbTcrdWNJMkxYVGY1MlcK"
     },
     "deep-link": {
       "desktop": {
