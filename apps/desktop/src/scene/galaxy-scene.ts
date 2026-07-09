@@ -58,6 +58,103 @@ function radialTexture(inner: number, mid: number): THREE.CanvasTexture {
 
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
 
+/**
+ * Procedural planet surface (ref image 2): a dark globe lit on one limb with
+ * glowing nebula veins/filaments in a hot version of the kind color. Seeded so
+ * each item's planet is stable across renders. Returns {map, emissive} — the
+ * emissive canvas holds only the glowing veins so they self-illuminate.
+ */
+function planetTextures(kindColor: number, seed: number): { map: THREE.CanvasTexture; emissive: THREE.CanvasTexture } {
+  const S = 256;
+  let s = seed || 1;
+  const rnd = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+  const base = new THREE.Color(kindColor);
+  const hot = base.clone().lerp(new THREE.Color(0xffffff), 0.5);
+  const dark = base.clone().multiplyScalar(0.12);
+
+  // ── surface map: dark body + terminator shading + faint mottling ──
+  const mc = document.createElement("canvas");
+  mc.width = mc.height = S;
+  const m = mc.getContext("2d")!;
+  m.fillStyle = `rgb(${(dark.r * 255) | 0},${(dark.g * 255) | 0},${(dark.b * 255) | 0})`;
+  m.fillRect(0, 0, S, S);
+  // lit limb (day side) — a soft gradient across the sphere's u
+  const lg = m.createLinearGradient(0, 0, S, 0);
+  lg.addColorStop(0, "rgba(255,255,255,0)");
+  lg.addColorStop(0.65, `rgba(${(base.r * 255) | 0},${(base.g * 255) | 0},${(base.b * 255) | 0},0.25)`);
+  lg.addColorStop(1, `rgba(${(hot.r * 255) | 0},${(hot.g * 255) | 0},${(hot.b * 255) | 0},0.4)`);
+  m.fillStyle = lg;
+  m.fillRect(0, 0, S, S);
+  // mottled cloud bands
+  m.globalCompositeOperation = "lighter";
+  for (let i = 0; i < 40; i++) {
+    const cx = rnd() * S;
+    const cy = rnd() * S;
+    const r = 8 + rnd() * 40;
+    const g = m.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, `rgba(${(base.r * 255) | 0},${(base.g * 255) | 0},${(base.b * 255) | 0},${0.04 + rnd() * 0.06})`);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    m.fillStyle = g;
+    m.beginPath();
+    m.arc(cx, cy, r, 0, Math.PI * 2);
+    m.fill();
+  }
+
+  // ── emissive map: glowing veins/filaments only (black elsewhere) ──
+  const ec = document.createElement("canvas");
+  ec.width = ec.height = S;
+  const e = ec.getContext("2d")!;
+  e.fillStyle = "#000";
+  e.fillRect(0, 0, S, S);
+  e.globalCompositeOperation = "lighter";
+  e.lineCap = "round";
+  const veinColor = `rgb(${(hot.r * 255) | 0},${(hot.g * 255) | 0},${(hot.b * 255) | 0})`;
+  const branches = 5 + Math.floor(rnd() * 6);
+  for (let b = 0; b < branches; b++) {
+    let px = rnd() * S;
+    let py = rnd() * S;
+    let ang = rnd() * Math.PI * 2;
+    const segs = 6 + Math.floor(rnd() * 10);
+    e.strokeStyle = veinColor;
+    e.shadowColor = veinColor;
+    for (let k = 0; k < segs; k++) {
+      ang += (rnd() - 0.5) * 1.1;
+      const len = 6 + rnd() * 20;
+      const nx = px + Math.cos(ang) * len;
+      const ny = py + Math.sin(ang) * len;
+      e.globalAlpha = 0.5 + rnd() * 0.5;
+      e.lineWidth = 0.6 + rnd() * 1.6;
+      e.shadowBlur = 6 + rnd() * 8;
+      e.beginPath();
+      e.moveTo(px, py);
+      e.lineTo(nx, ny);
+      e.stroke();
+      px = nx;
+      py = ny;
+    }
+  }
+  // a hot glowing core patch, like image 2's red bloom
+  e.globalAlpha = 1;
+  const cx = S * (0.35 + rnd() * 0.3);
+  const cy = S * (0.35 + rnd() * 0.3);
+  const cr = 20 + rnd() * 40;
+  const cg = e.createRadialGradient(cx, cy, 0, cx, cy, cr);
+  cg.addColorStop(0, veinColor);
+  cg.addColorStop(0.5, `rgba(${(hot.r * 255) | 0},${(hot.g * 255) | 0},${(hot.b * 255) | 0},0.3)`);
+  cg.addColorStop(1, "rgba(0,0,0,0)");
+  e.fillStyle = cg;
+  e.beginPath();
+  e.arc(cx, cy, cr, 0, Math.PI * 2);
+  e.fill();
+
+  const map = new THREE.CanvasTexture(mc);
+  const emissive = new THREE.CanvasTexture(ec);
+  map.minFilter = emissive.minFilter = THREE.LinearFilter;
+  return { map, emissive };
+}
+
+let seedCounter = 1;
+
 export class GalaxyScene {
   private renderer!: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
@@ -68,6 +165,7 @@ export class GalaxyScene {
   private systems: System[] = [];
   private knownOwners = new Set<string>(); // for grow-in of newly-appeared systems
   private knownItems = new Set<string>(); // …and newly-appeared planets
+  private planetTexes: THREE.Texture[] = []; // generated per-planet surface textures
   private glowTex = radialTexture(0.95, 0.4);
   private softTex = radialTexture(0.6, 0.25);
   private container: HTMLElement | null = null;
@@ -211,6 +309,9 @@ export class GalaxyScene {
         if (m.material) (m.material as THREE.Material).dispose();
       });
     }
+    // dispose only the per-planet generated textures (shared star/rim textures live on)
+    for (const tx of this.planetTexes) tx.dispose();
+    this.planetTexes = [];
     this.systems = [];
 
     const owners = new Map<string, GalaxyItem[]>();
@@ -279,10 +380,26 @@ export class GalaxyScene {
         const size = Math.max(0.22, 0.36 - kindItems.length * 0.012);
         kindItems.forEach((item, j) => {
           const angle = (j / kindItems.length) * Math.PI * 2 + lane * 0.7;
-          const planet = new THREE.Mesh(
-            new THREE.SphereGeometry(size, 18, 14),
-            new THREE.MeshStandardMaterial({ color: kc, emissive: kc, emissiveIntensity: 0.5, roughness: 0.4, metalness: 0.1 }),
-          );
+          // stable per-item seed → ~65% of bodies get a detailed nebula-lit
+          // surface (ref image 2); the rest stay as clean glowing orbs
+          let hseed = 0;
+          for (let k = 0; k < item.id.length; k++) hseed = (hseed * 31 + item.id.charCodeAt(k)) >>> 0;
+          const detailed = hseed % 100 < 65;
+          const mat = new THREE.MeshStandardMaterial({
+            color: detailed ? 0xffffff : kc,
+            emissive: kc,
+            emissiveIntensity: detailed ? 0.9 : 0.5,
+            roughness: 0.55,
+            metalness: 0.1,
+          });
+          if (detailed) {
+            const tex = planetTextures(kc, hseed || ++seedCounter);
+            mat.map = tex.map;
+            mat.emissiveMap = tex.emissive;
+            this.planetTexes.push(tex.map, tex.emissive);
+          }
+          const planet = new THREE.Mesh(new THREE.SphereGeometry(size, 24, 18), mat);
+          planet.rotation.y = (hseed % 628) / 100;
           planet.userData.item = item;
           const rim = new THREE.Sprite(
             new THREE.SpriteMaterial({ map: this.glowTex, color: kc, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }),
@@ -459,6 +576,7 @@ export class GalaxyScene {
         p.angle += p.speed * dt;
         // planet rides within its tilted orbital-plane holder
         p.mesh.position.set(Math.cos(p.angle) * p.orbit, 0, Math.sin(p.angle) * p.orbit);
+        p.mesh.rotation.y += dt * 0.18; // slow self-spin shows the surface detail
         p.dust.rotation.y += dt * 0.6;
         const hot = this.hovered === p;
         let grow = 1;

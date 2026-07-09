@@ -49,14 +49,6 @@ pre,
   height: 22px;
   opacity: 0.55;
 }
-.hud-grid {
-  opacity: 0.05;
-  background-image:
-    linear-gradient(to right, #7ce7f5 1px, transparent 1px),
-    linear-gradient(to bottom, #7ce7f5 1px, transparent 1px);
-  background-size: 46px 46px;
-  mask-image: radial-gradient(circle at 50% 45%, transparent 20%, black 90%);
-}
 /* scanner "signature" readout panel */
 .hud-panel {
   background: linear-gradient(135deg, rgba(14, 19, 40, 0.82), rgba(8, 10, 22, 0.9));
