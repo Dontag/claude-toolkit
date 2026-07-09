@@ -43,6 +43,100 @@ pre,
   @apply rounded px-1.5 text-sm text-muted transition hover:text-text;
 }
 
+/* ── Sci-fi HUD overlay ── */
+.hud-corner {
+  width: 22px;
+  height: 22px;
+  opacity: 0.55;
+}
+.hud-grid {
+  opacity: 0.05;
+  background-image:
+    linear-gradient(to right, #7ce7f5 1px, transparent 1px),
+    linear-gradient(to bottom, #7ce7f5 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(circle at 50% 45%, transparent 20%, black 90%);
+}
+/* scanner "signature" readout panel */
+.hud-panel {
+  background: linear-gradient(135deg, rgba(14, 19, 40, 0.82), rgba(8, 10, 22, 0.9));
+  border: 1px solid rgba(124, 231, 245, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(124, 231, 245, 0.08),
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    inset 0 0 30px rgba(124, 231, 245, 0.05);
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+}
+.hud-label {
+  font: 10px/1.4 ui-monospace, Consolas, monospace;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #7ce7f5;
+}
+.hud-bar {
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(124, 231, 245, 0.15);
+  overflow: hidden;
+}
+.hud-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #ff6b7a, #ffb057, #7ce7f5);
+  animation: hud-scan 2.4s ease-in-out infinite;
+}
+@keyframes hud-scan {
+  0%,
+  100% {
+    width: 30%;
+  }
+  50% {
+    width: 92%;
+  }
+}
+.hud-reticle {
+  position: fixed;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(124, 231, 245, 0.7);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: hud-pulse 1.8s ease-in-out infinite;
+}
+.hud-reticle::before,
+.hud-reticle::after {
+  content: "";
+  position: absolute;
+  background: rgba(124, 231, 245, 0.7);
+}
+.hud-reticle::before {
+  left: 50%;
+  top: -8px;
+  width: 1px;
+  height: 62px;
+  transform: translateX(-50%);
+}
+.hud-reticle::after {
+  top: 50%;
+  left: -8px;
+  height: 1px;
+  width: 62px;
+  transform: translateY(-50%);
+}
+@keyframes hud-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+}
+
 /* CSS starfield used by the Galaxy teaser tab */
 .stars-css {
   background-image:

@@ -1,32 +1,51 @@
-// GalaxyScene — the shared universe. Every user is a star system: a glowing
-// star in their signature color with published items orbiting as fruit-planets
-// colored by kind. Reuses GalaxyBackground for sky + comets; presence raises
-// the sky's energy and activity events streak comets in the actor's color.
+// GalaxyScene — the shared universe as a spiral dust galaxy.
+//   • backdrop: a rotating spiral dust disc (warm core → cyan arms, ref image 1)
+//   • each user = a solar system placed along a spiral arm: a glowing star with
+//     a corona, planets on tilted orbits, and a dust halo around each planet
+//   • each planet = a published item (color by kind); the swirling dust around
+//     it is the "matter" of that skill/hook/agent/command
+//   • nebula billboards + comets give the magenta sci-fi mood (ref image 2)
+// Public API is unchanged (mount/setItems/setActivity/cometPulse/dispose).
 import * as THREE from "three";
 import type { GalaxyItem } from "../lib/galaxy";
 import { userColor } from "../lib/presence";
 import { GalaxyBackground } from "./galaxy";
 import { CAT_COLOR } from "./scene";
 
+interface Planet {
+  mesh: THREE.Mesh;
+  rim: THREE.Sprite;
+  dust: THREE.Points;
+  orbit: number;
+  angle: number;
+  speed: number;
+  tilt: number;
+  item: GalaxyItem;
+}
+
 interface System {
   ownerId: string;
   group: THREE.Group;
-  planets: THREE.Mesh[];
   star: THREE.Sprite;
+  corona: THREE.Sprite;
+  planets: Planet[];
   spin: number;
 }
 
 export interface GalaxySceneCallbacks {
   onItemSelected?: (item: GalaxyItem | null) => void;
+  onHover?: (item: GalaxyItem | null) => void;
+  /** screen coords of the hovered planet each frame (null when nothing hovered) */
+  onReticle?: (p: { x: number; y: number } | null) => void;
 }
 
-function glowTexture(): THREE.CanvasTexture {
+function radialTexture(inner: number, mid: number): THREE.CanvasTexture {
   const c = document.createElement("canvas");
   c.width = c.height = 128;
   const x = c.getContext("2d")!;
   const g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
-  g.addColorStop(0, "rgba(255,255,255,0.95)");
-  g.addColorStop(0.3, "rgba(255,255,255,0.4)");
+  g.addColorStop(0, `rgba(255,255,255,${inner})`);
+  g.addColorStop(0.3, `rgba(255,255,255,${mid})`);
   g.addColorStop(1, "rgba(255,255,255,0)");
   x.fillStyle = g;
   x.fillRect(0, 0, 128, 128);
@@ -35,25 +54,29 @@ function glowTexture(): THREE.CanvasTexture {
   return t;
 }
 
+const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+
 export class GalaxyScene {
   private renderer!: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera!: THREE.PerspectiveCamera;
   private world = new THREE.Group();
   private background = new GalaxyBackground();
+  private disc!: THREE.Points;
   private systems: System[] = [];
-  private tex = glowTexture();
+  private glowTex = radialTexture(0.95, 0.4);
+  private softTex = radialTexture(0.6, 0.25);
   private container: HTMLElement | null = null;
   private raf = 0;
   private disposed = false;
   private clock = new THREE.Clock();
 
   private theta = 0.6;
-  private phi = 1.15;
-  private dist = 30;
+  private phi = 1.1;
+  private dist = 34;
   private targetTheta = 0.6;
-  private targetPhi = 1.15;
-  private targetDist = 30;
+  private targetPhi = 1.1;
+  private targetDist = 34;
   private dragging = false;
   private lastX = 0;
   private lastY = 0;
@@ -61,8 +84,7 @@ export class GalaxyScene {
   private downY = 0;
   private ray = new THREE.Raycaster();
   private mouse = new THREE.Vector2(-2, -2);
-  private hovered: THREE.Object3D | null = null;
-  private hoverLabel: THREE.Sprite | null = null;
+  private hovered: Planet | null = null;
   private cleanups: Array<() => void> = [];
 
   constructor(private cb: GalaxySceneCallbacks = {}) {}
@@ -73,10 +95,13 @@ export class GalaxyScene {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.renderer.setSize(el.clientWidth, el.clientHeight);
     el.appendChild(this.renderer.domElement);
-    this.camera = new THREE.PerspectiveCamera(50, el.clientWidth / el.clientHeight, 0.1, 400);
-    this.scene.add(new THREE.AmbientLight(0x8890c8, 0.6));
+    this.camera = new THREE.PerspectiveCamera(50, el.clientWidth / el.clientHeight, 0.1, 600);
+    this.scene.fog = new THREE.FogExp2(0x05030f, 0.004);
+    this.scene.add(new THREE.AmbientLight(0x8890c8, 0.5));
     this.scene.add(this.background.group);
     this.scene.add(this.world);
+    this.buildDisc();
+    this.buildNebulae();
     this.bindInput(el);
     this.animate();
   }
@@ -84,15 +109,106 @@ export class GalaxyScene {
   setActivity(level: number) {
     this.background.setActivity(level);
   }
-
   cometPulse(color?: number) {
     this.background.spawnComet(color);
   }
 
-  /** Rebuild star systems from the latest galaxy snapshot. */
+  /* ── Backdrop: spiral dust galaxy (warm core, cyan arms) ── */
+  private buildDisc() {
+    const N = 9000;
+    const arms = 3;
+    const maxR = 120;
+    const twist = 3.4;
+    const pos = new Float32Array(N * 3);
+    const col = new Float32Array(N * 3);
+    const core = new THREE.Color(0xffb066);
+    const mid = new THREE.Color(0xff7a3c);
+    const edge = new THREE.Color(0x39d0e6);
+    for (let i = 0; i < N; i++) {
+      const r = Math.pow(Math.random(), 0.55) * maxR;
+      const arm = Math.floor(Math.random() * arms);
+      const angle = (arm / arms) * Math.PI * 2 + (r / maxR) * twist * Math.PI * 2 + gauss() * 0.35;
+      const jitter = gauss() * (2 + (r / maxR) * 10);
+      pos[i * 3] = Math.cos(angle) * r + jitter;
+      pos[i * 3 + 1] = gauss() * (6 * (1 - r / maxR) + 1.2); // thin disc, thicker core
+      pos[i * 3 + 2] = Math.sin(angle) * r + jitter;
+      const tRad = r / maxR;
+      const c = tRad < 0.35 ? core.clone().lerp(mid, tRad / 0.35) : mid.clone().lerp(edge, (tRad - 0.35) / 0.65);
+      // brighten the very core
+      const b = tRad < 0.12 ? 1.4 : 1;
+      col[i * 3] = Math.min(1, c.r * b);
+      col[i * 3 + 1] = Math.min(1, c.g * b);
+      col[i * 3 + 2] = Math.min(1, c.b * b);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    this.disc = new THREE.Points(
+      g,
+      new THREE.PointsMaterial({
+        size: 0.7,
+        map: this.softTex,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        sizeAttenuation: true,
+      }),
+    );
+    this.disc.position.y = -4;
+    this.world.add(this.disc);
+
+    // a warm glow sprite sitting in the galactic core
+    const coreGlow = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: this.glowTex,
+        color: 0xffa860,
+        transparent: true,
+        opacity: 0.5,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    coreGlow.scale.set(48, 48, 1);
+    coreGlow.position.y = -3;
+    this.world.add(coreGlow);
+  }
+
+  private buildNebulae() {
+    const tints = [0x7b2ff0, 0xb02897, 0x2f6fe0, 0xff5a3c];
+    for (let i = 0; i < 7; i++) {
+      const s = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: this.softTex,
+          color: tints[i % tints.length],
+          transparent: true,
+          opacity: 0.12,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        }),
+      );
+      const a = (i / 7) * Math.PI * 2;
+      const r = 45 + (i % 3) * 30;
+      s.position.set(Math.cos(a) * r, 8 + gauss() * 20, Math.sin(a) * r);
+      const size = 60 + (i % 4) * 30;
+      s.scale.set(size, size * 0.7, 1);
+      this.world.add(s);
+    }
+  }
+
+  /* ── Solar systems ── */
   setItems(items: GalaxyItem[]) {
-    for (const s of this.systems) this.world.remove(s.group);
+    for (const s of this.systems) {
+      this.world.remove(s.group);
+      s.group.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.geometry) m.geometry.dispose();
+        if (m.material) (m.material as THREE.Material).dispose();
+      });
+    }
     this.systems = [];
+
     const owners = new Map<string, GalaxyItem[]>();
     for (const it of items) {
       if (!owners.has(it.ownerId)) owners.set(it.ownerId, []);
@@ -102,74 +218,105 @@ export class GalaxyScene {
     let idx = 0;
     for (const [ownerId, ownerItems] of owners) {
       const group = new THREE.Group();
-      // spiral placement: each system on a widening ring around the center
-      const ang = idx * 2.399963;
-      const rad = n === 1 ? 0 : 8 + idx * 4.5;
-      group.position.set(Math.cos(ang) * rad, Math.sin(idx * 1.7) * 3, Math.sin(ang) * rad);
+      // place systems along a spiral arm of the galaxy
+      const ang = idx * 2.399963 + 0.6;
+      const rad = n === 1 ? 0 : 10 + Math.sqrt(idx) * 9;
+      group.position.set(Math.cos(ang) * rad, 1.5 + Math.sin(idx * 1.3) * 4, Math.sin(ang) * rad);
       const col = userColor(ownerId);
 
+      // star: bright core sprite + soft corona + light
       const star = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: this.tex,
-          color: col,
-          transparent: true,
-          opacity: 0.95,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-        }),
+        new THREE.SpriteMaterial({ map: this.glowTex, color: col, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }),
       );
-      star.scale.set(3.2, 3.2, 1);
-      group.add(star);
-      const light = new THREE.PointLight(col, 1.2, 18, 2);
-      group.add(light);
+      star.scale.set(3.4, 3.4, 1);
+      const corona = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: this.softTex, color: col, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }),
+      );
+      corona.scale.set(9, 9, 1);
+      group.add(corona, star);
+      group.add(new THREE.PointLight(col, 1.4, 26, 2));
 
-      const label = this.makeLabel(`@${ownerItems[0]!.ownerHandle}`, "#e7e9f4", "rgba(13,16,30,0.9)");
-      label.position.set(0, 2.6, 0);
+      const label = this.makeLabel(`@${ownerItems[0]!.ownerHandle}`, col);
+      label.position.set(0, 3.4, 0);
       group.add(label);
 
-      const planets: THREE.Mesh[] = [];
+      const planets: Planet[] = [];
       ownerItems.forEach((item, i) => {
-        const orbit = 2.2 + (i % 4) * 0.9;
-        const a = (i / ownerItems.length) * Math.PI * 2 + i * 0.7;
-        const mesh = new THREE.Mesh(
-          new THREE.SphereGeometry(0.32, 18, 14),
-          new THREE.MeshStandardMaterial({
-            color: CAT_COLOR[item.kind],
-            emissive: CAT_COLOR[item.kind],
-            emissiveIntensity: 0.55,
-            roughness: 0.35,
-          }),
+        const orbit = 2.6 + i * 1.15 + (i % 2) * 0.4;
+        const tilt = (i % 3) * 0.4 - 0.4;
+        const angle = (i / ownerItems.length) * Math.PI * 2 + i * 0.9;
+        const kc = CAT_COLOR[item.kind];
+
+        const planet = new THREE.Mesh(
+          new THREE.SphereGeometry(0.34, 20, 16),
+          new THREE.MeshStandardMaterial({ color: kc, emissive: kc, emissiveIntensity: 0.5, roughness: 0.4, metalness: 0.1 }),
         );
-        mesh.position.set(Math.cos(a) * orbit, Math.sin(i * 2.1) * 0.7, Math.sin(a) * orbit);
-        mesh.userData.item = item;
-        // faint orbit ring
+        planet.userData.item = item;
+
+        // rim glow behind the planet → nebula-lit look
+        const rim = new THREE.Sprite(
+          new THREE.SpriteMaterial({ map: this.glowTex, color: kc, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }),
+        );
+        rim.scale.set(1.5, 1.5, 1);
+        planet.add(rim);
+
+        // dust halo: the "matter" of this item, swirling around it
+        const dust = this.makeDust(kc);
+        planet.add(dust);
+
+        // tilted orbital plane holds both the ring and the planet, so the
+        // planet always rides its ring
+        const holder = new THREE.Group();
+        holder.rotation.set(tilt, 0, (i % 2) * 0.25);
         const ring = new THREE.Mesh(
-          new THREE.TorusGeometry(orbit, 0.012, 6, 64),
-          new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.12 }),
+          new THREE.TorusGeometry(orbit, 0.01, 6, 80),
+          new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false }),
         );
         ring.rotation.x = Math.PI / 2;
-        group.add(ring, mesh);
-        planets.push(mesh);
+        holder.add(ring);
+        holder.add(planet);
+        group.add(holder);
+
+        planets.push({ mesh: planet, rim, dust, orbit, angle, speed: 0.12 + (i % 4) * 0.05, tilt, item });
       });
 
       this.world.add(group);
-      this.systems.push({ ownerId, group, planets, star, spin: 0.05 + (idx % 5) * 0.015 });
+      this.systems.push({ ownerId, group, star, corona, planets, spin: 0.03 + (idx % 5) * 0.01 });
       idx++;
     }
-    // frame the whole galaxy
-    this.targetDist = Math.max(18, 14 + n * 4);
+    this.targetDist = Math.max(20, 16 + Math.sqrt(n) * 8);
   }
 
-  private makeLabel(text: string, fg: string, bg: string): THREE.Sprite {
+  private makeDust(color: number): THREE.Points {
+    const N = 120;
+    const pos = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) {
+      // flattened ring cloud around the planet
+      const r = 0.5 + Math.random() * 0.5;
+      const a = Math.random() * Math.PI * 2;
+      pos[i * 3] = Math.cos(a) * r;
+      pos[i * 3 + 1] = gauss() * 0.12;
+      pos[i * 3 + 2] = Math.sin(a) * r;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    return new THREE.Points(
+      g,
+      new THREE.PointsMaterial({ color, size: 0.06, map: this.softTex, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+  }
+
+  private makeLabel(text: string, tint: number): THREE.Sprite {
     const c = document.createElement("canvas");
     const x = c.getContext("2d")!;
     const fs = 40;
     x.font = `600 ${fs}px Inter,system-ui,sans-serif`;
-    const w = Math.ceil(x.measureText(text).width) + 40;
+    const w = Math.ceil(x.measureText(text).width) + 44;
     c.width = w;
     c.height = fs + 26;
     x.font = `600 ${fs}px Inter,system-ui,sans-serif`;
-    x.fillStyle = bg;
+    const hex = "#" + tint.toString(16).padStart(6, "0");
+    x.fillStyle = "rgba(8,10,22,0.82)";
     const r = c.height / 2;
     x.beginPath();
     x.moveTo(r, 0);
@@ -178,13 +325,16 @@ export class GalaxyScene {
     x.lineTo(r, c.height);
     x.arc(r, r, r, Math.PI / 2, Math.PI * 1.5);
     x.fill();
-    x.fillStyle = fg;
+    x.strokeStyle = hex;
+    x.lineWidth = 2;
+    x.stroke();
+    x.fillStyle = "#e7e9f4";
     x.textBaseline = "middle";
-    x.fillText(text, 20, c.height / 2 + 2);
+    x.fillText(text, 22, c.height / 2 + 2);
     const t = new THREE.CanvasTexture(c);
     t.minFilter = THREE.LinearFilter;
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false }));
-    s.scale.set(w / 90, c.height / 90, 1);
+    s.scale.set(w / 82, c.height / 82, 1);
     return s;
   }
 
@@ -197,7 +347,7 @@ export class GalaxyScene {
     const onMove = (e: PointerEvent) => {
       if (this.dragging) {
         this.targetTheta += (e.clientX - this.lastX) * 0.006;
-        this.targetPhi = Math.min(1.5, Math.max(0.3, this.targetPhi + (e.clientY - this.lastY) * 0.004));
+        this.targetPhi = Math.min(1.52, Math.max(0.15, this.targetPhi + (e.clientY - this.lastY) * 0.004));
         this.lastX = e.clientX;
         this.lastY = e.clientY;
       }
@@ -207,15 +357,12 @@ export class GalaxyScene {
     };
     const onUp = () => (this.dragging = false);
     const onWheel = (e: WheelEvent) => {
-      this.targetDist = Math.min(120, Math.max(6, this.targetDist + e.deltaY * 0.03));
+      this.targetDist = Math.min(160, Math.max(5, this.targetDist + e.deltaY * 0.04));
     };
     const onClick = (e: MouseEvent) => {
       if (Math.abs(e.clientX - this.downX) > 4 || Math.abs(e.clientY - this.downY) > 4) return;
       this.ray.setFromCamera(this.mouse, this.camera);
-      const hits = this.ray.intersectObjects(
-        this.systems.flatMap((s) => s.planets),
-        false,
-      );
+      const hits = this.ray.intersectObjects(this.systems.flatMap((s) => s.planets.map((p) => p.mesh)), false);
       this.cb.onItemSelected?.(hits.length ? (hits[0]!.object.userData.item as GalaxyItem) : null);
     };
     const onResize = () => {
@@ -243,26 +390,13 @@ export class GalaxyScene {
 
   private updateHover() {
     this.ray.setFromCamera(this.mouse, this.camera);
-    const hits = this.ray.intersectObjects(
-      this.systems.flatMap((s) => s.planets),
-      false,
-    );
-    const hit = hits.length ? hits[0]!.object : null;
-    if (hit !== this.hovered) {
-      this.hovered = hit;
-      if (this.container) this.container.style.cursor = hit ? "pointer" : "grab";
-      if (this.hoverLabel) {
-        this.hoverLabel.parent?.remove(this.hoverLabel);
-        this.hoverLabel.material.map?.dispose();
-        this.hoverLabel.material.dispose();
-        this.hoverLabel = null;
-      }
-      if (hit) {
-        const item = hit.userData.item as GalaxyItem;
-        this.hoverLabel = this.makeLabel(item.name, "#e7e9f4", "rgba(13,16,30,0.92)");
-        this.hoverLabel.position.copy((hit as THREE.Mesh).position).add(new THREE.Vector3(0, 0.7, 0));
-        hit.parent?.add(this.hoverLabel);
-      }
+    const hits = this.ray.intersectObjects(this.systems.flatMap((s) => s.planets.map((p) => p.mesh)), false);
+    const planet = hits.length ? this.systems.flatMap((s) => s.planets).find((p) => p.mesh === hits[0]!.object) ?? null : null;
+    if (planet !== this.hovered) {
+      this.hovered = planet;
+      if (this.container) this.container.style.cursor = planet ? "pointer" : "grab";
+      this.cb.onHover?.(planet?.item ?? null);
+      if (!planet) this.cb.onReticle?.(null);
     }
   }
 
@@ -274,7 +408,7 @@ export class GalaxyScene {
     this.theta += (this.targetTheta - this.theta) * 0.07;
     this.phi += (this.targetPhi - this.phi) * 0.07;
     this.dist += (this.targetDist - this.dist) * 0.07;
-    if (!this.dragging) this.targetTheta += 0.02 * dt;
+    if (!this.dragging) this.targetTheta += 0.015 * dt;
     this.camera.position.set(
       this.dist * Math.sin(this.phi) * Math.cos(this.theta),
       this.dist * Math.cos(this.phi),
@@ -282,12 +416,36 @@ export class GalaxyScene {
     );
     this.camera.lookAt(0, 0, 0);
 
+    this.disc.rotation.y += dt * 0.012;
     for (const s of this.systems) {
       s.group.rotation.y += s.spin * dt;
-      s.star.material.opacity = 0.85 + Math.sin(t * 2 + s.group.position.x) * 0.1;
+      s.star.material.opacity = 0.85 + Math.sin(t * 2 + s.group.position.x) * 0.12;
+      const coronaScale = 9 + Math.sin(t * 1.5 + s.group.position.z) * 0.5;
+      s.corona.scale.set(coronaScale, coronaScale, 1);
+      for (const p of s.planets) {
+        p.angle += p.speed * dt;
+        // planet rides within its tilted orbital-plane holder
+        p.mesh.position.set(Math.cos(p.angle) * p.orbit, 0, Math.sin(p.angle) * p.orbit);
+        p.dust.rotation.y += dt * 0.6;
+        const hot = this.hovered === p;
+        const target = hot ? 1.5 : 1;
+        p.mesh.scale.lerp(new THREE.Vector3(target, target, target), 0.2);
+        (p.rim.material as THREE.SpriteMaterial).opacity = 0.5 + (hot ? 0.4 : 0) + Math.sin(t * 3 + p.angle) * 0.1;
+      }
     }
     this.background.step(dt, t);
     this.updateHover();
+    // project the hovered planet to screen so the HUD reticle can track it
+    if (this.hovered && this.container) {
+      const wp = new THREE.Vector3();
+      this.hovered.mesh.getWorldPosition(wp);
+      wp.project(this.camera);
+      const rect = this.container.getBoundingClientRect();
+      this.cb.onReticle?.({
+        x: rect.left + ((wp.x + 1) / 2) * rect.width,
+        y: rect.top + ((1 - wp.y) / 2) * rect.height,
+      });
+    }
     this.renderer.render(this.scene, this.camera);
   };
 
@@ -296,7 +454,8 @@ export class GalaxyScene {
     cancelAnimationFrame(this.raf);
     for (const c of this.cleanups) c();
     this.background.dispose();
-    this.tex.dispose();
+    this.glowTex.dispose();
+    this.softTex.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }

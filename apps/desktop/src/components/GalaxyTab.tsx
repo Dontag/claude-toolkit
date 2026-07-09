@@ -8,6 +8,7 @@ import { GalaxyScene } from "../scene/galaxy-scene";
 import { useSession } from "../stores/session";
 import { useUi } from "../stores/ui";
 import { RefreshButton } from "./RefreshButton";
+import { HudFrame } from "./HudFrame";
 
 const KIND_COLOR: Record<string, string> = {
   skill: "#ff6b7a",
@@ -23,6 +24,8 @@ export function GalaxyTab() {
 
 function GalaxyLive() {
   const ref = useRef<HTMLDivElement>(null);
+  const reticleRef = useRef<HTMLDivElement>(null);
+  const hoverRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<GalaxyScene | null>(null);
   const [selected, setSelected] = useState<GalaxyItem | null>(null);
   const [content, setContent] = useState<string | null>(null);
@@ -37,7 +40,29 @@ function GalaxyLive() {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const scene = new GalaxyScene({ onItemSelected: setSelected });
+    const reticle = reticleRef.current;
+    const scene = new GalaxyScene({
+      onItemSelected: setSelected,
+      onHover: (item) => {
+        if (hoverRef.current) hoverRef.current.textContent = item ? item.name : "";
+      },
+      onReticle: (p) => {
+        if (!reticle) return;
+        if (p) {
+          reticle.style.display = "block";
+          reticle.style.left = `${p.x}px`;
+          reticle.style.top = `${p.y}px`;
+          if (hoverRef.current) {
+            hoverRef.current.style.left = `${p.x + 30}px`;
+            hoverRef.current.style.top = `${p.y - 10}px`;
+            hoverRef.current.style.display = "block";
+          }
+        } else {
+          reticle.style.display = "none";
+          if (hoverRef.current) hoverRef.current.style.display = "none";
+        }
+      },
+    });
     scene.mount(el);
     sceneRef.current = scene;
     scene.setItems(useGalaxy.getState().items);
@@ -69,12 +94,23 @@ function GalaxyLive() {
   return (
     <div className="relative h-full">
       <div ref={ref} className="absolute inset-0 cursor-grab" />
+      <HudFrame accent="#7ce7f5" />
+      {/* live targeting reticle + hover callsign (moved via refs, no re-render) */}
+      <div ref={reticleRef} className="hud-reticle z-[6]" style={{ display: "none" }} />
+      <div
+        ref={hoverRef}
+        className="pointer-events-none fixed z-[6] hud-label whitespace-nowrap text-[11px] text-text"
+        style={{ display: "none" }}
+      />
       <div className="absolute left-4 top-4 z-10 flex items-center gap-2">
-        <div className="pointer-events-none rounded-full border border-border bg-black/30 px-4 py-1.5 text-[11px] text-muted backdrop-blur">
-          {loading ? "Scanning the galaxy…" : `${items.length} shared items · ${online} online`}
-          {!session && " · sign in to share yours"}
+        <div className="hud-panel pointer-events-none px-4 py-1.5">
+          <span className="hud-label">Galactic survey</span>
+          <div className="mt-0.5 text-[11px] text-text">
+            {loading ? "scanning…" : `${items.length} signatures · ${online} online`}
+            {!session && " · sign in to share"}
+          </div>
         </div>
-        <RefreshButton onRefresh={fetchGalaxy} label="Refresh" />
+        <RefreshButton onRefresh={fetchGalaxy} label="Rescan" />
       </div>
 
       {galaxyError && !loading && (
@@ -87,20 +123,28 @@ function GalaxyLive() {
       )}
 
       {selected && (
-        <aside className="absolute right-4 top-4 z-10 w-[340px] max-h-[calc(100%-2rem)] overflow-y-auto rounded-2xl border border-border bg-glass p-4 backdrop-blur-xl shadow-2xl">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: KIND_COLOR[selected.kind] }}>
-              {selected.kind}
+        <aside className="hud-panel absolute right-4 top-4 z-10 w-[340px] max-h-[calc(100%-2rem)] overflow-y-auto p-4 backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-2">
+            <span className="hud-label" style={{ color: KIND_COLOR[selected.kind] }}>
+              ◆ {selected.kind} signature
             </span>
             <button className="btn-ghost" onClick={() => setSelected(null)}>
               ✕
             </button>
           </div>
-          <h3 className="mt-1 text-[15px] font-semibold">{selected.name}</h3>
-          <p className="mt-1 text-xs leading-relaxed text-muted">{selected.description}</p>
+          <h3 className="mt-1.5 text-[16px] font-semibold tracking-tight">{selected.name}</h3>
+          {/* signal readout, ref image 2 */}
+          <div className="mt-2 flex items-center gap-2">
+            <span className="hud-label text-[9px]">signal</span>
+            <div className="hud-bar flex-1">
+              <i style={{ background: KIND_COLOR[selected.kind] }} />
+            </div>
+            <span className="hud-label text-[9px]">locked</span>
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-muted">{selected.description}</p>
           <div className="mt-2 flex items-center gap-2 text-[11px] text-muted">
             {selected.ownerAvatar && <img src={selected.ownerAvatar} alt="" className="h-4 w-4 rounded-full" />}
-            @{selected.ownerHandle} · updated {selected.updatedAt.slice(0, 10)}
+            system @{selected.ownerHandle} · updated {selected.updatedAt.slice(0, 10)}
           </div>
           <div className="mt-3 flex gap-2">
             <button

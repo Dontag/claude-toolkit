@@ -9,6 +9,7 @@ import { ItemPanel } from "./components/ItemPanel";
 import { GalaxyTab } from "./components/GalaxyTab";
 import { AuthMenu } from "./components/AuthMenu";
 import { RefreshButton } from "./components/RefreshButton";
+import { HudFrame } from "./components/HudFrame";
 import { rescanLocal } from "./sources/bootstrap";
 import { refreshRemaining, useConnection } from "./stores/connection";
 import { fetchGalaxy } from "./lib/galaxy";
@@ -184,6 +185,7 @@ export default function App() {
         {tab === "personal" ? (
           <>
             {ready && <TreeView />}
+            <HudFrame accent="#5fae7d" />
             <ItemPanel />
             <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-border bg-black/30 px-4 py-1.5 text-[11px] text-muted backdrop-blur">
               Drag to rotate · Scroll to zoom · Click a fruit · <kbd>/</kbd> search · <kbd>Esc</kbd> resets · <kbd>Ctrl+R</kbd> rescan

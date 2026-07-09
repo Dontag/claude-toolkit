@@ -82,13 +82,10 @@ export function ItemPanel() {
 
   return (
     <>
-      <aside className="absolute right-4 top-16 z-10 w-[340px] max-h-[calc(100%-6rem)] overflow-y-auto rounded-2xl border border-border bg-glass p-4 backdrop-blur-xl shadow-2xl">
-        <div className="flex items-baseline justify-between gap-2">
-          <span
-            className="text-[11px] font-bold uppercase tracking-wider"
-            style={{ color: KIND_COLOR[item.kind] }}
-          >
-            {item.kind}
+      <aside className="hud-panel absolute right-4 top-16 z-10 w-[340px] max-h-[calc(100%-6rem)] overflow-y-auto p-4 backdrop-blur-xl">
+        <div className="flex items-center justify-between gap-2">
+          <span className="hud-label" style={{ color: KIND_COLOR[item.kind] }}>
+            ◆ {item.kind}
           </span>
           <button className="btn-ghost" onClick={() => useUi.getState().select(null)}>
             ✕
