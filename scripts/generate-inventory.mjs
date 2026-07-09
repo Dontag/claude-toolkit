@@ -15,7 +15,10 @@ import matter from "gray-matter";
 import { z } from "zod";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const OUT = join(ROOT, "apps", "site", "public", "data", "inventory.json");
+const OUTS = [
+  join(ROOT, "apps", "site", "public", "data", "inventory.json"),
+  join(ROOT, "apps", "desktop", "public", "data", "inventory.json"), // app demo mode
+];
 const REPO_BASE = "https://github.com/Dontag/claude-toolkit";
 
 const ToolkitItem = z.object({
@@ -156,8 +159,10 @@ if (!inventory.success) {
   process.exit(1);
 }
 
-mkdirSync(dirname(OUT), { recursive: true });
-writeFileSync(OUT, JSON.stringify(inventory.data, null, 2) + "\n", "utf8");
+for (const out of OUTS) {
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(out, JSON.stringify(inventory.data, null, 2) + "\n", "utf8");
+}
 console.log(
-  `generate-inventory: ${inventory.data.items.length} items, ${inventory.data.changelog.length} changelog entries → ${OUT}`,
+  `generate-inventory: ${inventory.data.items.length} items, ${inventory.data.changelog.length} changelog entries → ${OUTS.join(", ")}`,
 );

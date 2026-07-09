@@ -11,6 +11,10 @@ __pycache__/
 # generated site data (produced by scripts/generate-inventory.mjs + workflows)
 apps/site/public/data/
 apps/site/public/dashboard/
+apps/desktop/public/data/
+
+# claude local settings (personal, not for the repo)
+.claude/settings.local.json
 
 # env / local
 .env

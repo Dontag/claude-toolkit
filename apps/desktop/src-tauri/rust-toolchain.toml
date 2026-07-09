@@ -1,0 +1,5 @@
+# rustc 1.96.1 ICEs (rustc_privacy delayed bug) compiling tauri-macros 2.6.3
+# on windows-msvc — pin a proven toolchain until a fixed rustc ships.
+[toolchain]
+channel = "1.93.0"
+profile = "minimal"

@@ -1,4 +1,3 @@
-import matter from "gray-matter";
 import type { ItemKind } from "./schema.js";
 
 export interface ParsedItemFile {
@@ -9,18 +8,39 @@ export interface ParsedItemFile {
 }
 
 /**
+ * Minimal, dependency-free frontmatter parser (browser-safe — gray-matter
+ * needs Node's Buffer, which the Tauri webview doesn't have).
+ * Handles the flat `key: value` YAML this toolkit uses; quoted values are
+ * unquoted; nested/multiline YAML is not supported (values kept as raw text).
+ */
+export function parseFrontmatter(raw: string): { data: Record<string, unknown>; body: string } {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(raw);
+  if (!m) return { data: {}, body: raw };
+  const data: Record<string, unknown> = {};
+  for (const line of m[1]!.split(/\r?\n/)) {
+    const kv = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(line);
+    if (!kv) continue;
+    let v = kv[2]!.trim();
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+      v = v.slice(1, -1);
+    }
+    data[kv[1]!] = v;
+  }
+  return { data, body: raw.slice(m[0].length) };
+}
+
+/**
  * Parse a toolkit markdown file (SKILL.md, agent .md, command .md).
  * Commands have no `name` in frontmatter — fall back to the given default
  * (derived from the filename by callers).
  */
 export function parseItemFile(raw: string, defaultName: string): ParsedItemFile {
-  const { data, content } = matter(raw);
-  const fm = data as Record<string, unknown>;
+  const { data, body } = parseFrontmatter(raw);
   return {
-    name: typeof fm.name === "string" && fm.name.trim() ? fm.name.trim() : defaultName,
-    description: typeof fm.description === "string" ? fm.description.trim() : "",
-    frontmatter: fm,
-    body: content,
+    name: typeof data.name === "string" && data.name.trim() ? data.name.trim() : defaultName,
+    description: typeof data.description === "string" ? data.description.trim() : "",
+    frontmatter: data,
+    body,
   };
 }
 
