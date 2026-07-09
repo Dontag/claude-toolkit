@@ -16,6 +16,7 @@ interface SessionState {
   profile: Profile | null;
   authBusy: boolean;
   authError: string | null;
+  authNotice: string | null;
   signInWithGitHub: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<boolean>;
   signUpWithEmail: (email: string, password: string) => Promise<boolean>;
@@ -35,16 +36,20 @@ export const useSession = create<SessionState>((set) => ({
   profile: null,
   authBusy: false,
   authError: null,
+  authNotice: null,
 
   signInWithGitHub: async () => {
     if (!supabase) return;
-    set({ authBusy: true, authError: null });
+    set({ authBusy: true, authError: null, authNotice: null });
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "github",
       options: { skipBrowserRedirect: true, redirectTo: "claude-toolkit://auth-callback" },
     });
     if (error || !data.url) {
-      set({ authBusy: false, authError: error?.message ?? "Could not start GitHub sign-in" });
+      const msg = /not enabled|unsupported provider/i.test(error?.message ?? "")
+        ? "GitHub sign-in isn't enabled on this Supabase project yet. Enable it under Authentication → Sign In / Providers, or use email below."
+        : (error?.message ?? "Could not start GitHub sign-in");
+      set({ authBusy: false, authError: msg });
       return;
     }
     await openUrl(data.url); // system browser; the deep link brings the code back
@@ -52,7 +57,7 @@ export const useSession = create<SessionState>((set) => ({
 
   signInWithEmail: async (email, password) => {
     if (!supabase) return false;
-    set({ authBusy: true, authError: null });
+    set({ authBusy: true, authError: null, authNotice: null });
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     set({ authBusy: false, authError: error?.message ?? null });
     return !error;
@@ -60,12 +65,14 @@ export const useSession = create<SessionState>((set) => ({
 
   signUpWithEmail: async (email, password) => {
     if (!supabase) return false;
-    set({ authBusy: true, authError: null });
-    const { error } = await supabase.auth.signUp({ email, password });
-    set({
-      authBusy: false,
-      authError: error?.message ?? null,
-    });
+    set({ authBusy: true, authError: null, authNotice: null });
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    // when "Confirm email" is on, signUp returns a user but no session
+    if (!error && data.user && !data.session) {
+      set({ authBusy: false, authNotice: "Account created — check your email to confirm, then sign in." });
+      return false; // keep the menu open on the sign-in tab
+    }
+    set({ authBusy: false, authError: error?.message ?? null });
     return !error;
   },
 

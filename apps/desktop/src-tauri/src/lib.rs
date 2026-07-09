@@ -32,6 +32,18 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_persisted_scope::init())
         .setup(|app| {
+            // Dev builds: open devtools automatically (WebView context menu is off)
+            #[cfg(debug_assertions)]
+            if let Some(win) = app.get_webview_window("main") {
+                win.open_devtools();
+            }
+            #[cfg(desktop)]
+            {
+                // Register the claude-toolkit:// scheme at runtime so OAuth deep
+                // links work in `tauri dev` too (not just installed builds).
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let _ = app.deep_link().register_all();
+            }
             #[cfg(desktop)]
             {
                 // Tray: hide-to-tray keeps the ~/.claude watcher alive in the background
@@ -58,10 +70,20 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // closing the window hides to tray; Quit in the tray menu exits
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let _ = window.hide();
-                api.prevent_close();
+                // Release: hide to tray so the ~/.claude watcher keeps running.
+                // Dev: fully exit, so `tauri dev` tears down Vite/ports and the
+                // next build can replace the (otherwise locked) exe.
+                #[cfg(debug_assertions)]
+                {
+                    let _ = api; // exit normally
+                    window.app_handle().exit(0);
+                }
+                #[cfg(not(debug_assertions))]
+                {
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
             }
         })
         .run(tauri::generate_context!())

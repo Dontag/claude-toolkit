@@ -7,6 +7,7 @@ export function AuthMenu() {
   const profile = useSession((s) => s.profile);
   const busy = useSession((s) => s.authBusy);
   const error = useSession((s) => s.authError);
+  const notice = useSession((s) => s.authNotice);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
@@ -84,7 +85,8 @@ export function AuthMenu() {
               {mode === "signin" ? "New here?" : "Have an account?"}
             </button>
           </div>
-          {error && <p className="mt-2 text-[11px] text-red-300">{error}</p>}
+          {error && <p className="mt-2 text-[11px] leading-snug text-red-300">{error}</p>}
+          {notice && <p className="mt-2 text-[11px] leading-snug text-emerald-300">{notice}</p>}
         </div>
       )}
     </div>
