@@ -248,47 +248,58 @@ export class GalaxyScene {
       label.position.set(0, 3.4, 0);
       group.add(label);
 
+      // Group items by kind into orbital lanes: each kind gets one ring, and
+      // multiple items of that kind (e.g. several hooks) share the ring, spaced
+      // evenly around it. Lanes are ordered skills→agents→hooks→commands so a
+      // system's structure reads consistently across users.
+      const KIND_ORDER: Array<Planet["item"]["kind"]> = ["skill", "agent", "hook", "command"];
       const planets: Planet[] = [];
-      ownerItems.forEach((item, i) => {
-        const orbit = 2.6 + i * 1.15 + (i % 2) * 0.4;
-        const tilt = (i % 3) * 0.4 - 0.4;
-        const angle = (i / ownerItems.length) * Math.PI * 2 + i * 0.9;
-        const kc = CAT_COLOR[item.kind];
+      let lane = 0;
+      for (const kind of KIND_ORDER) {
+        const kindItems = ownerItems.filter((it) => it.kind === kind);
+        if (!kindItems.length) continue;
+        const orbit = 2.4 + lane * 1.5; // one radius per populated kind
+        const tilt = lane * 0.32 - 0.4;
+        const roll = (lane % 2) * 0.22;
+        const kc = CAT_COLOR[kind];
 
-        const planet = new THREE.Mesh(
-          new THREE.SphereGeometry(0.34, 20, 16),
-          new THREE.MeshStandardMaterial({ color: kc, emissive: kc, emissiveIntensity: 0.5, roughness: 0.4, metalness: 0.1 }),
-        );
-        planet.userData.item = item;
-
-        // rim glow behind the planet → nebula-lit look
-        const rim = new THREE.Sprite(
-          new THREE.SpriteMaterial({ map: this.glowTex, color: kc, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }),
-        );
-        rim.scale.set(1.5, 1.5, 1);
-        planet.add(rim);
-
-        // dust halo: the "matter" of this item, swirling around it
-        const dust = this.makeDust(kc);
-        planet.add(dust);
-
-        // tilted orbital plane holds both the ring and the planet, so the
-        // planet always rides its ring
+        // the shared lane ring (drawn once per kind)
         const holder = new THREE.Group();
-        holder.rotation.set(tilt, 0, (i % 2) * 0.25);
+        holder.rotation.set(tilt, 0, roll);
         const ring = new THREE.Mesh(
-          new THREE.TorusGeometry(orbit, 0.01, 6, 80),
-          new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false }),
+          new THREE.TorusGeometry(orbit, 0.012, 6, 96),
+          new THREE.MeshBasicMaterial({ color: kc, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false }),
         );
         ring.rotation.x = Math.PI / 2;
         holder.add(ring);
-        holder.add(planet);
         group.add(holder);
 
-        const planetBorn = this.knownItems.has(item.id) ? 0 : now;
-        if (planetBorn) planet.scale.setScalar(0.01);
-        planets.push({ mesh: planet, rim, dust, orbit, angle, speed: 0.12 + (i % 4) * 0.05, tilt, item, born: planetBorn });
-      });
+        // planets of this kind spaced around the shared lane; size tapers a
+        // little as a lane gets crowded so many hooks still fit cleanly
+        const size = Math.max(0.22, 0.36 - kindItems.length * 0.012);
+        kindItems.forEach((item, j) => {
+          const angle = (j / kindItems.length) * Math.PI * 2 + lane * 0.7;
+          const planet = new THREE.Mesh(
+            new THREE.SphereGeometry(size, 18, 14),
+            new THREE.MeshStandardMaterial({ color: kc, emissive: kc, emissiveIntensity: 0.5, roughness: 0.4, metalness: 0.1 }),
+          );
+          planet.userData.item = item;
+          const rim = new THREE.Sprite(
+            new THREE.SpriteMaterial({ map: this.glowTex, color: kc, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }),
+          );
+          rim.scale.set(size * 4.4, size * 4.4, 1);
+          planet.add(rim);
+          const dust = this.makeDust(kc);
+          planet.add(dust);
+          holder.add(planet);
+
+          const planetBorn = this.knownItems.has(item.id) ? 0 : now;
+          if (planetBorn) planet.scale.setScalar(0.01);
+          // slight per-planet speed variance so a crowded lane doesn't look rigid
+          planets.push({ mesh: planet, rim, dust, orbit, angle, speed: 0.14 + (j % 4) * 0.04, tilt, item, born: planetBorn });
+        });
+        lane++;
+      }
 
       this.world.add(group);
       this.systems.push({ ownerId, group, star, corona, planets, spin: 0.03 + (idx % 5) * 0.01, born: sysBorn });
