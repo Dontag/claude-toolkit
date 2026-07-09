@@ -1,0 +1,28 @@
+# Supabase local dev config (supabase start). The hosted project mirrors this.
+project_id = "claude-toolkit"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "claude-toolkit://auth-callback"
+additional_redirect_urls = ["claude-toolkit://auth-callback", "http://localhost:1420"]
+
+[auth.external.github]
+enabled = true
+client_id = "env(SUPABASE_AUTH_GITHUB_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_GITHUB_SECRET)"
+
+[realtime]
+enabled = true

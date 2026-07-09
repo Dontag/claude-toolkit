@@ -7,7 +7,12 @@ import { useUi } from "./stores/ui";
 import { TreeView, sceneRef } from "./components/TreeView";
 import { ItemPanel } from "./components/ItemPanel";
 import { GalaxyTab } from "./components/GalaxyTab";
+import { AuthMenu } from "./components/AuthMenu";
 import { checkForUpdates } from "./updater";
+import { useSession } from "./stores/session";
+import { hydrateSharedState } from "./lib/publish";
+import { joinGalaxyPresence, leaveGalaxyPresence, usePresence, userColor } from "./lib/presence";
+import { galaxyConfigured } from "./lib/supabase";
 
 export default function App() {
   const tab = useUi((s) => s.tab);
@@ -21,10 +26,15 @@ export default function App() {
   useEffect(() => {
     bootstrapInventory().finally(() => setReady(true));
     void checkForUpdates();
-    // deep links: claude-toolkit://item/<id> flies straight to a fruit
+    // deep links: item links fly to a fruit; auth-callback completes OAuth
     let unlisten: (() => void) | undefined;
     onOpenUrl((urls) => {
-      const m = /^claude-toolkit:\/\/item\/(.+)$/.exec(urls[0] ?? "");
+      const url = urls[0] ?? "";
+      if (url.startsWith("claude-toolkit://auth-callback")) {
+        void useSession.getState().completeOAuth(url);
+        return;
+      }
+      const m = /^claude-toolkit:\/\/item\/(.+)$/.exec(url);
       if (m) {
         useUi.getState().setTab("personal");
         sceneRef.current?.focusItem(decodeURIComponent(m[1]!));
@@ -34,6 +44,35 @@ export default function App() {
       .catch(() => {}); // not registered in dev — fine
     return () => unlisten?.();
   }, []);
+
+  // signed in → learn which local items are already shared + join presence
+  useEffect(() => {
+    if (!galaxyConfigured) return;
+    const sync = (signedIn: boolean) => {
+      if (signedIn) {
+        void hydrateSharedState([...useInventory.getState().items.values()]);
+        joinGalaxyPresence();
+      } else {
+        leaveGalaxyPresence();
+      }
+    };
+    sync(!!useSession.getState().session);
+    return useSession.subscribe((s, prev) => {
+      if (!!s.session !== !!prev.session) sync(!!s.session);
+    });
+  }, []);
+
+  // community activity → a comet streaks the Personal Space sky too
+  useEffect(
+    () =>
+      usePresence.subscribe((s, prev) => {
+        if (s.lastActivity && s.lastActivity !== prev.lastActivity) {
+          sceneRef.current?.cometPulse(userColor(s.lastActivity.userId));
+        }
+        if (s.onlineCount !== prev.onlineCount) sceneRef.current?.setActivity?.(s.onlineCount);
+      }),
+    [],
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -81,8 +120,11 @@ export default function App() {
             }}
           />
         )}
+        <div className={tab === "personal" ? "" : "ml-auto"}>
+          <AuthMenu />
+        </div>
         <button
-          className={`${tab === "personal" ? "" : "ml-auto "}rounded-full border border-border bg-black/30 px-3 py-1 text-[11px] text-muted transition hover:border-brand hover:text-text`}
+          className="rounded-full border border-border bg-black/30 px-3 py-1 text-[11px] text-muted transition hover:border-brand hover:text-text"
           title={mode === "local" ? "Open your .claude folder" : "Demo mode"}
           onClick={() => {
             if (sourceState.local) void revealItemInDir(sourceState.local.root).catch(() => {});

@@ -90,3 +90,19 @@ The repo is evolving into a desktop product (Tauri v2 app + Supabase backend). S
 | `scripts/generate-inventory.mjs` | Scans toolkit content → `inventory.json` (site + app demo data) |
 
 Dev: `pnpm install`, then `pnpm generate && pnpm --filter @claude-toolkit/site dev` for the site.
+
+### Desktop dev
+
+```bash
+pnpm --filter @claude-toolkit/desktop tauri dev    # needs Rust (pinned via rust-toolchain.toml)
+```
+
+### Galaxy backend (Supabase)
+
+The Galaxy tab (shared universe, per-item publishing, realtime comets) needs a Supabase project:
+
+1. Create a free project at supabase.com → run the migration: `supabase link --project-ref <ref> && supabase db push` (or paste `supabase/migrations/*.sql` into the SQL editor).
+2. Auth → Providers: enable **GitHub** (create a GitHub OAuth app; callback URL comes from the Supabase dashboard) and **Email**. Add `claude-toolkit://auth-callback` to Auth → URL Configuration → Redirect URLs.
+3. Copy `apps/desktop/.env.example` to `.env`, fill in the project URL + anon key, rebuild.
+
+Without the env vars the app builds fine and the Galaxy tab shows setup instructions.

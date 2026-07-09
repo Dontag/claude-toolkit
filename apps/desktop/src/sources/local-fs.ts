@@ -138,6 +138,16 @@ export class LocalFsSource {
     }
   }
 
+  /** Write a file at a toolkit-relative path, creating parent dirs (grafting). */
+  async writeNewFile(relPath: string, content: string): Promise<void> {
+    const parts = relPath.replace(/\\/g, "/").split("/");
+    if (parts.length > 1) {
+      const dir = await join(this.root, ...parts.slice(0, -1));
+      await mkdir(dir, { recursive: true });
+    }
+    await writeTextFile(await join(this.root, ...parts), content);
+  }
+
   /** Create a starter skill (used by the onboarding "plant your first fruit"). */
   async plantSkill(name: string, description: string): Promise<void> {
     const dir = await join(this.root, "skills", name);

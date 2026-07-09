@@ -5,6 +5,9 @@ import { sourceState } from "../sources/bootstrap";
 import { useInventory } from "../stores/inventory";
 import { useUi } from "../stores/ui";
 import { Editor } from "./Editor";
+import { galaxyConfigured } from "../lib/supabase";
+import { useSession } from "../stores/session";
+import { pushVersion, setSync, shareItem, unshareItem, usePublish } from "../lib/publish";
 
 const KIND_COLOR: Record<string, string> = {
   skill: "#ff6b7a",
@@ -56,6 +59,11 @@ export function ItemPanel() {
       setContent(draft);
       useUi.getState().setEditorOpen(false);
       showToast(`💾 ${item.name} saved`);
+      // Sync switch ON → the save flies to the Galaxy immediately
+      const meta = usePublish.getState().shared.get(item.id);
+      if (meta?.syncOn) {
+        if (await pushVersion(item, draft)) showToast(`💾 saved · ☄️ pushed to the Galaxy`);
+      }
     } catch {
       showToast("Save failed — is the file locked?");
     }
@@ -133,6 +141,8 @@ export function ItemPanel() {
           </div>
         )}
 
+        {mode === "local" && galaxyConfigured && <ShareControls itemId={item.id} content={content} />}
+
         {content !== null && !editorOpen && (
           <pre className="mt-3 max-h-56 overflow-y-auto whitespace-pre-wrap break-words rounded-xl border border-border bg-black/30 p-3 font-mono text-[11px] leading-relaxed text-muted">
             {content}
@@ -140,6 +150,7 @@ export function ItemPanel() {
         )}
       </aside>
 
+      {/* editor modal */}
       {editorOpen && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 p-8 backdrop-blur-sm">
           <div className="flex h-full w-full max-w-3xl flex-col rounded-2xl border border-border bg-[#0b0f22] p-4 shadow-2xl">
@@ -163,5 +174,85 @@ export function ItemPanel() {
         </div>
       )}
     </>
+  );
+}
+
+/** Share-to-Galaxy toggle + Sync switch + Push button (signed-in, local mode). */
+function ShareControls({ itemId, content }: { itemId: string; content: string | null }) {
+  const session = useSession((s) => s.session);
+  const item = useInventory((s) => s.items.get(itemId));
+  const meta = usePublish((s) => s.shared.get(itemId));
+  const busy = usePublish((s) => s.busy.has(itemId));
+  const showToast = useUi((s) => s.showToast);
+
+  if (!session)
+    return (
+      <div className="mt-3 rounded-lg border border-border bg-black/20 p-2 text-[11.5px] text-muted">
+        🌌 Sign in (top right) to share this to the Galaxy.
+      </div>
+    );
+  if (!item) return null;
+
+  const toggleShare = async () => {
+    if (content === null) return;
+    if (meta) {
+      if (await unshareItem(item)) showToast(`🌑 ${item.name} removed from the Galaxy`);
+      else showToast("Couldn't unshare — try again");
+    } else {
+      if (await shareItem(item, content)) showToast(`🌟 ${item.name} is now shining in the Galaxy`);
+      else showToast("Share failed — are you online?");
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-xl border border-border bg-black/20 p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium">🌌 Share to Galaxy</span>
+        <button
+          role="switch"
+          aria-checked={!!meta}
+          disabled={busy || content === null}
+          onClick={toggleShare}
+          className={`relative h-5 w-9 rounded-full transition ${meta ? "bg-brand" : "bg-white/10"} disabled:opacity-40`}
+        >
+          <span
+            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${meta ? "left-4.5" : "left-0.5"}`}
+          />
+        </button>
+      </div>
+      {meta && (
+        <>
+          <div className="mt-2 flex items-center justify-between">
+            <span className="text-[11.5px] text-muted">☄️ Sync local changes automatically</span>
+            <button
+              role="switch"
+              aria-checked={meta.syncOn}
+              disabled={busy}
+              onClick={() => void setSync(itemId, !meta.syncOn)}
+              className={`relative h-5 w-9 rounded-full transition ${meta.syncOn ? "bg-brand" : "bg-white/10"} disabled:opacity-40`}
+            >
+              <span
+                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${meta.syncOn ? "left-4.5" : "left-0.5"}`}
+              />
+            </button>
+          </div>
+          {!meta.syncOn && meta.localAhead && (
+            <div className="mt-2 flex items-center justify-between rounded-lg bg-amber-400/10 px-2 py-1.5">
+              <span className="text-[11px] text-amber-300">Local is ahead of the Galaxy</span>
+              <button
+                className="btn text-[11px]"
+                disabled={busy || content === null}
+                onClick={async () => {
+                  if (content !== null && (await pushVersion(item, content)))
+                    showToast(`☄️ ${item.name} pushed to the Galaxy`);
+                }}
+              >
+                ⬆ Push
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }

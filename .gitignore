@@ -25,3 +25,4 @@ apps/desktop/public/data/
 # OS
 .DS_Store
 Thumbs.db
+apps/desktop/.env

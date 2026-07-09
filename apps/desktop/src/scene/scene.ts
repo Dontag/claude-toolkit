@@ -339,9 +339,14 @@ export class SkillTreeScene {
     this.cb.onClusterFocused?.(null);
   }
 
-  /** Activity pulse: fire a comet now (used later for realtime events). */
+  /** Activity pulse: fire a comet now (realtime community events). */
   cometPulse(color?: number) {
     this.galaxy.spawnComet(color);
+  }
+
+  /** Presence-driven sky energy: more users online → livelier sky. */
+  setActivity(level: number) {
+    this.galaxy.setActivity(level);
   }
 
   /* ── Rebuild: canopy (branches/foliage/labels) + fruits ── */
