@@ -74,9 +74,21 @@ Supabase → **Authentication → URL Configuration → Redirect URLs** → **Ad
 
 ---
 
-## 4. Coming in Phase 3 (not needed yet)
+## 4. Phase 3 — access management (change requests + 30-min windows + admin)
 
-Change-requests + 30-minute exclusive write windows + admin panel will add:
-- More migrations (`change_requests`, `access_grants`, `audit_log`) — same `supabase db push` flow.
-- A **pg_cron** job to expire grants — enable the `pg_cron` extension in Supabase → Database → Extensions.
-- Edge Functions for atomic grant/admin actions — needs the Supabase CLI + your service-role key (I'll walk you through it).
+Run the second migration (`supabase/migrations/20260709000002_phase3_access.sql`) — same as before: paste it into the Supabase **SQL Editor** and Run, or `supabase db push`. It's validated against Postgres 15 (9/9 RLS window checks pass, all 6 RPCs compile).
+
+Two one-time steps in Supabase:
+1. **Enable `pg_cron`** — Database → Extensions → search `pg_cron` → enable. The migration auto-schedules `expire-grants` to run every minute (it's a safe no-op if the extension isn't on — expiry is still enforced instantly by RLS on the server clock, the cron just cleans up + sends "expired" notifications).
+2. **Make yourself an admin** (to see the ⚙ console) — Database → SQL Editor:
+   ```sql
+   update public.profiles set role='admin' where handle='<your-handle>';
+   ```
+   (Roles are immutable from the client by design; only SQL / another admin can set them.)
+
+How it works in the app:
+- On someone else's Galaxy item → **✋ Request changes**. The owner gets a 🔔 notification with **Grant 30 min / Deny**.
+- While a grant is live: the grantee sees 🔓 + countdown and can edit/push; the owner sees 🔒 + countdown and is paused. When it expires, control reverts automatically.
+- **⚙ Admin console**: users (promote/demote), live grants (force-revoke), toolkit moderation (active/hidden/banned), audit log.
+
+Grant/deny/revoke/admin actions all run through security-definer RPCs that re-check permissions server-side, so the client can't bypass them.

@@ -11,6 +11,8 @@ import { galaxyConfigured } from "../lib/supabase";
 import { useSession } from "../stores/session";
 import { pushVersion, setSync, shareItem, unshareItem, usePublish } from "../lib/publish";
 import { confirm } from "../stores/confirm";
+import { useAccess } from "../lib/access";
+import { fmtCountdown, useCountdown } from "../lib/useCountdown";
 
 const KIND_COLOR: Record<string, string> = {
   skill: "#ff6b7a",
@@ -209,6 +211,10 @@ function ShareControls({ itemId, content }: { itemId: string; content: string | 
   const meta = usePublish((s) => s.shared.get(itemId));
   const busy = usePublish((s) => s.busy.has(itemId));
   const showToast = useUi((s) => s.showToast);
+  // owner lockout: is my shared item currently under a grant to someone else?
+  const grant = useAccess((s) => (meta ? s.grants.get(meta.cloudItemId) : undefined));
+  const lockMs = useCountdown(grant?.expiresAt);
+  const lockedByOther = !!grant && grant.granteeId !== session?.user.id && lockMs > 0;
 
   if (!session)
     return (
@@ -238,6 +244,12 @@ function ShareControls({ itemId, content }: { itemId: string; content: string | 
 
   return (
     <div className="mt-3 rounded-xl border border-border bg-black/20 p-3">
+      {lockedByOther && (
+        <div className="mb-2 flex items-center justify-between rounded-lg border border-amber-400/40 bg-amber-400/10 px-2 py-1.5 text-[11px] text-amber-300">
+          <span>🔒 An editor has the write window — you're paused</span>
+          <span className="font-mono">{fmtCountdown(lockMs)}</span>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium">🌌 Share to Galaxy</span>
         <button

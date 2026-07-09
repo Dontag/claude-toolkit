@@ -7,7 +7,10 @@ import { useUi } from "./stores/ui";
 import { TreeView, sceneRef } from "./components/TreeView";
 import { ItemPanel } from "./components/ItemPanel";
 import { AuthMenu } from "./components/AuthMenu";
+import { AccessCenter } from "./components/AccessCenter";
+import { AdminButton } from "./components/AdminPanel";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { refreshAccess, subscribeAccess } from "./lib/access";
 
 // The Galaxy pulls in a second three.js scene + realtime — only load it when opened
 const GalaxyTab = lazy(() => import("./components/GalaxyTab").then((m) => ({ default: m.GalaxyTab })));
@@ -61,6 +64,8 @@ export default function App() {
       if (signedIn) {
         void hydrateSharedState([...useInventory.getState().items.values()]);
         joinGalaxyPresence();
+        void refreshAccess();
+        subscribeAccess();
       } else {
         leaveGalaxyPresence();
       }
@@ -163,7 +168,9 @@ export default function App() {
             }}
           />
         )}
-        <div className={tab === "personal" ? "" : "ml-auto"}>
+        <div className={`flex items-center gap-2 ${tab === "personal" ? "" : "ml-auto"}`}>
+          <AdminButton />
+          <AccessCenter />
           <AuthMenu />
         </div>
         {tab === "personal" && mode === "local" && <RefreshButton onRefresh={rescanLocal} label="Rescan" />}

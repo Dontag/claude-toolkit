@@ -9,6 +9,9 @@ import { useSession } from "../stores/session";
 import { useUi } from "../stores/ui";
 import { RefreshButton } from "./RefreshButton";
 import { HudFrame } from "./HudFrame";
+import { requestChanges, useAccess } from "../lib/access";
+import { fmtCountdown, useCountdown } from "../lib/useCountdown";
+import { confirm } from "../stores/confirm";
 
 const KIND_COLOR: Record<string, string> = {
   skill: "#ff6b7a",
@@ -16,6 +19,51 @@ const KIND_COLOR: Record<string, string> = {
   hook: "#a78bfa",
   command: "#38d3e8",
 };
+
+/** "Request changes" on someone else's item (hidden on your own). */
+function RequestChangesButton({ item }: { item: GalaxyItem }) {
+  const uid = useSession((s) => s.session?.user.id);
+  const showToast = useUi((s) => s.showToast);
+  if (!uid || item.ownerId === uid) return null;
+  return (
+    <button
+      className="btn"
+      onClick={async () => {
+        const ok = await confirm({
+          title: `Request edit access to "${item.name}"?`,
+          message: "The owner can grant you an exclusive 30-minute window to edit it. They'll be notified.",
+          confirmLabel: "Send request",
+        });
+        if (!ok) return;
+        const r = await requestChanges(item, "");
+        if (r === "ok") showToast("📨 Request sent to the owner");
+        else if (r === "self") showToast("That's your own item");
+        else showToast("Couldn't send request");
+      }}
+    >
+      ✋ Request changes
+    </button>
+  );
+}
+
+/** Shows the live 30-minute grant countdown / padlock on the selected item. */
+function GrantStatus({ itemId }: { itemId: string }) {
+  const uid = useSession((s) => s.session?.user.id);
+  const grant = useAccess((s) => s.grants.get(itemId));
+  const ms = useCountdown(grant?.expiresAt);
+  if (!grant || ms <= 0) return null;
+  const mine = grant.granteeId === uid;
+  return (
+    <div
+      className={`mt-3 flex items-center justify-between rounded-lg border px-3 py-2 text-[11px] ${
+        mine ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300" : "border-amber-400/40 bg-amber-400/10 text-amber-300"
+      }`}
+    >
+      <span>{mine ? "🔓 You have the write window" : "🔒 Locked by another editor"}</span>
+      <span className="font-mono">{fmtCountdown(ms)}</span>
+    </div>
+  );
+}
 
 export function GalaxyTab() {
   if (!galaxyConfigured) return <GalaxyTeaser />;
@@ -169,7 +217,9 @@ function GalaxyLive() {
             >
               {grafting ? "Grafting…" : "🌱 Graft onto my tree"}
             </button>
+            <RequestChangesButton item={selected} />
           </div>
+          <GrantStatus itemId={selected.id} />
           {content !== null && (
             <pre className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-xl border border-border bg-black/30 p-3 font-mono text-[11px] leading-relaxed text-muted">
               {content}
