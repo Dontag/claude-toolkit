@@ -81,9 +81,11 @@ export class SkillTreeScene {
   private trunkCurve!: THREE.CatmullRomCurve3;
   private trunkMat!: THREE.MeshStandardMaterial;
   private canopy = new THREE.Group(); // branches + foliage + labels + hit spheres, rebuilt on change
-  private clusterHit = new Map<ItemKind, THREE.Mesh>();
+  private clusterHit = new Map<ItemKind, THREE.Mesh[]>();
   private clusterLabels = new Map<ItemKind, THREE.Sprite>();
-  private cluster!: Record<ItemKind, { center: THREE.Vector3; R: number }>;
+  /** Adaptive: each category holds sub-clusters of ≤SUB_CAP fruits; overflow grows a new branch. */
+  private cluster!: Record<ItemKind, { center: THREE.Vector3; R: number; subs: Array<{ center: THREE.Vector3; R: number; count: number }> }>;
+  private static readonly SUB_CAP = 10;
   private flies!: THREE.Points;
   private fliesBaseY!: Float32Array;
   private glowTex!: THREE.CanvasTexture;
@@ -350,13 +352,46 @@ export class SkillTreeScene {
   }
 
   private computeClusters() {
-    const sizeFor = (c: ItemKind) => Math.min(2.7, Math.max(1.1, 0.8 + 0.5 * Math.sqrt(this.catCount(c))));
-    this.cluster = {
-      skill: { center: new THREE.Vector3(2.6, 6.4, 0.6), R: sizeFor("skill") },
-      agent: { center: new THREE.Vector3(-2.4, 6.0, 1.4), R: sizeFor("agent") },
-      hook: { center: new THREE.Vector3(-1.2, 7.4, -2.0), R: sizeFor("hook") },
-      command: { center: new THREE.Vector3(1.4, 5.2, -2.2), R: sizeFor("command") },
+    const CAP = SkillTreeScene.SUB_CAP;
+    const BASE: Record<ItemKind, THREE.Vector3> = {
+      skill: new THREE.Vector3(2.6, 6.4, 0.6),
+      agent: new THREE.Vector3(-2.4, 6.0, 1.4),
+      hook: new THREE.Vector3(-1.2, 7.4, -2.0),
+      command: new THREE.Vector3(1.4, 5.2, -2.2),
     };
+    const GOLDEN = 2.399963229728653;
+    this.cluster = {} as typeof this.cluster;
+    CATS.forEach((cat, ci) => {
+      const count = this.catCount(cat);
+      const nSubs = Math.max(1, Math.ceil(count / CAP));
+      const subs: Array<{ center: THREE.Vector3; R: number; count: number }> = [];
+      const base = BASE[cat];
+      // outward direction so overflow branches grow away from the trunk
+      const out = base.clone().setY(0).normalize();
+      for (let s = 0; s < nSubs; s++) {
+        const subCount = Math.max(1, Math.min(CAP, count - s * CAP));
+        const R = Math.min(2.2, Math.max(1.0, 0.8 + 0.45 * Math.sqrt(subCount)));
+        if (s === 0) {
+          subs.push({ center: base.clone(), R, count: subCount });
+        } else {
+          // deterministic golden-angle ring around the parent, biased outward
+          const ang = s * GOLDEN + ci * 1.7;
+          const ring = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang));
+          const dir = ring.multiplyScalar(0.8).add(out.clone().multiplyScalar(0.7)).normalize();
+          const prev = subs[0]!;
+          const center = prev.center
+            .clone()
+            .add(dir.multiplyScalar(prev.R + R * 0.85))
+            .add(new THREE.Vector3(0, (s % 2 === 0 ? -0.5 : 0.7) + 0.2 * (s % 3), 0));
+          subs.push({ center, R, count: subCount });
+        }
+      }
+      // bounding radius over all subs → camera focus frames the whole family
+      const c0 = subs[0]!.center;
+      let bound = subs[0]!.R;
+      for (const sub of subs) bound = Math.max(bound, c0.distanceTo(sub.center) + sub.R);
+      this.cluster[cat] = { center: c0, R: bound, subs };
+    });
   }
 
   private disposeGroup(group: THREE.Group) {
@@ -382,78 +417,90 @@ export class SkillTreeScene {
     this.clusterLabels.clear();
 
     CATS.forEach((cat, ci) => {
-      const { center, R } = this.cluster[cat];
-      const start = this.trunkCurve.getPoint(0.55 + ci * 0.13);
-      const mid = start.clone().lerp(center, 0.5).add(new THREE.Vector3(0, 0.6, 0));
-      const bc = new THREE.QuadraticBezierCurve3(start, mid, center.clone().sub(new THREE.Vector3(0, R * 0.4, 0)));
-      const branchR = Math.min(0.22, 0.08 + 0.015 * this.catCount(cat));
-      this.canopy.add(new THREE.Mesh(new THREE.TubeGeometry(bc, 16, branchR, 8), this.trunkMat));
-      const rndT = rand(500 + ci * 31);
-      for (let k = 0; k < 3; k++) {
-        const p0 = bc.getPoint(0.35 + rndT() * 0.4);
-        const tip = center
-          .clone()
-          .add(new THREE.Vector3((rndT() - 0.5) * R * 1.6, (rndT() - 0.3) * R, (rndT() - 0.5) * R * 1.6));
-        const tc = new THREE.QuadraticBezierCurve3(p0, p0.clone().lerp(tip, 0.5).add(new THREE.Vector3(0, 0.25, 0)), tip);
-        this.canopy.add(new THREE.Mesh(new THREE.TubeGeometry(tc, 8, 0.05, 6), this.trunkMat));
-      }
+      const { subs, R: boundR, center: mainCenter } = this.cluster[cat];
+      const hits: THREE.Mesh[] = [];
 
-      const rnd = rand(1000 + ci * 77);
-      const blobs: Array<{ c: THREE.Vector3; r: number }> = [];
-      const nb = 4 + Math.floor(rnd() * 2);
-      for (let b = 0; b < nb; b++) {
-        blobs.push({
-          c: center.clone().add(new THREE.Vector3((rnd() - 0.5) * R * 1.4, (rnd() - 0.4) * R * 0.9, (rnd() - 0.5) * R * 1.4)),
-          r: R * (0.45 + rnd() * 0.4),
-        });
-      }
-      (
-        [
-          [1, 0.075, 0.35],
-          [0.6, 0.055, 0.5],
-          [0.35, 0.11, 0.18],
-        ] as const
-      ).forEach(([, size, op], li) => {
-        const N = Math.round(280 + 420 * R);
-        const pos = new Float32Array(N * 3);
-        for (let i = 0; i < N; i++) {
-          const b = blobs[Math.floor(rnd() * blobs.length)]!;
-          const u = rnd() * 2 - 1;
-          const th = rnd() * Math.PI * 2;
-          const rr = b.r * Math.cbrt(rnd());
-          const sq = Math.sqrt(1 - u * u);
-          pos[i * 3] = b.c.x + rr * sq * Math.cos(th);
-          pos[i * 3 + 1] = b.c.y + rr * u * 0.75;
-          pos[i * 3 + 2] = b.c.z + rr * sq * Math.sin(th);
+      subs.forEach((sub, si) => {
+        const { center, R, count } = sub;
+        // sub 0 branches from the trunk; overflow sub-branches fork off the parent cluster
+        const start = si === 0 ? this.trunkCurve.getPoint(0.55 + ci * 0.13) : subs[0]!.center.clone();
+        const mid = start.clone().lerp(center, 0.5).add(new THREE.Vector3(0, si === 0 ? 0.6 : 0.35, 0));
+        const bc = new THREE.QuadraticBezierCurve3(start, mid, center.clone().sub(new THREE.Vector3(0, R * 0.4, 0)));
+        const branchR = Math.min(0.22, 0.08 + 0.015 * count) * (si === 0 ? 1 : 0.8);
+        this.canopy.add(new THREE.Mesh(new THREE.TubeGeometry(bc, 16, branchR, 8), this.trunkMat));
+        const rndT = rand(500 + ci * 31 + si * 17);
+        for (let k = 0; k < (si === 0 ? 3 : 2); k++) {
+          const p0 = bc.getPoint(0.35 + rndT() * 0.4);
+          const tip = center
+            .clone()
+            .add(new THREE.Vector3((rndT() - 0.5) * R * 1.6, (rndT() - 0.3) * R, (rndT() - 0.5) * R * 1.6));
+          const tc = new THREE.QuadraticBezierCurve3(p0, p0.clone().lerp(tip, 0.5).add(new THREE.Vector3(0, 0.25, 0)), tip);
+          this.canopy.add(new THREE.Mesh(new THREE.TubeGeometry(tc, 8, 0.05, 6), this.trunkMat));
         }
-        const g = new THREE.BufferGeometry();
-        g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-        const base = new THREE.Color(FOLIAGE[cat]);
-        const col = li === 1 ? base.clone().lerp(new THREE.Color(0xffffff), 0.45) : base;
-        const m = new THREE.PointsMaterial({
-          color: col,
-          size,
-          transparent: true,
-          opacity: op,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending,
+
+        const rnd = rand(1000 + ci * 77 + si * 29);
+        const blobs: Array<{ c: THREE.Vector3; r: number }> = [];
+        const nb = 4 + Math.floor(rnd() * 2);
+        for (let b = 0; b < nb; b++) {
+          blobs.push({
+            c: center.clone().add(new THREE.Vector3((rnd() - 0.5) * R * 1.4, (rnd() - 0.4) * R * 0.9, (rnd() - 0.5) * R * 1.4)),
+            r: R * (0.45 + rnd() * 0.4),
+          });
+        }
+        (
+          [
+            [1, 0.075, 0.35],
+            [0.6, 0.055, 0.5],
+            [0.35, 0.11, 0.18],
+          ] as const
+        ).forEach(([, size, op], li) => {
+          const N = Math.round(280 + 420 * R);
+          const pos = new Float32Array(N * 3);
+          for (let i = 0; i < N; i++) {
+            const b = blobs[Math.floor(rnd() * blobs.length)]!;
+            const u = rnd() * 2 - 1;
+            const th = rnd() * Math.PI * 2;
+            const rr = b.r * Math.cbrt(rnd());
+            const sq = Math.sqrt(1 - u * u);
+            pos[i * 3] = b.c.x + rr * sq * Math.cos(th);
+            pos[i * 3 + 1] = b.c.y + rr * u * 0.75;
+            pos[i * 3 + 2] = b.c.z + rr * sq * Math.sin(th);
+          }
+          const g = new THREE.BufferGeometry();
+          g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+          const base = new THREE.Color(FOLIAGE[cat]);
+          const col = li === 1 ? base.clone().lerp(new THREE.Color(0xffffff), 0.45) : base;
+          const m = new THREE.PointsMaterial({
+            color: col,
+            size,
+            transparent: true,
+            opacity: op,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+          });
+          const p = new THREE.Points(g, m);
+          this.canopy.add(p);
         });
-        const p = new THREE.Points(g, m);
-        this.canopy.add(p);
+
+        const hit = new THREE.Mesh(new THREE.SphereGeometry(R * 1.05, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
+        hit.position.copy(center);
+        hit.userData.cat = cat;
+        this.canopy.add(hit);
+        hits.push(hit);
+
+        const gl = new THREE.PointLight(FOLIAGE[cat], si === 0 ? 0.9 : 0.6, 7, 2);
+        gl.position.copy(center);
+        this.canopy.add(gl);
       });
 
-      const hit = new THREE.Mesh(new THREE.SphereGeometry(R * 1.05, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
-      hit.position.copy(center);
-      hit.userData.cat = cat;
-      this.canopy.add(hit);
-      this.clusterHit.set(cat, hit);
+      this.clusterHit.set(cat, hits);
 
-      const gl = new THREE.PointLight(FOLIAGE[cat], 0.9, 7, 2);
-      gl.position.copy(center);
-      this.canopy.add(gl);
-
-      const lbl = this.makeLabel(CAT_LABEL[cat], "#e7e9f4", "rgba(13,16,30,0.85)");
-      lbl.position.copy(center).add(new THREE.Vector3(0, R * 0.95 + 0.4, 0));
+      const lbl = this.makeLabel(
+        subs.length > 1 ? `${CAT_LABEL[cat]} ×${subs.length}` : CAT_LABEL[cat],
+        "#e7e9f4",
+        "rgba(13,16,30,0.85)",
+      );
+      lbl.position.copy(mainCenter).add(new THREE.Vector3(0, boundR * 0.6 + 0.6, 0));
       lbl.material.opacity = 0.95;
       this.canopy.add(lbl);
       this.clusterLabels.set(cat, lbl);
@@ -464,11 +511,16 @@ export class SkillTreeScene {
     this.disposeGroup(this.fruitGroup);
     this.fruits = [];
     const golden = Math.PI * (3 - Math.sqrt(5));
+    const CAP = SkillTreeScene.SUB_CAP;
     CATS.forEach((cat) => {
       const items = [...this.items.values()].filter((n) => n.kind === cat);
-      const { center, R } = this.cluster[cat];
-      items.forEach((node, i) => {
-        const t = (i + 0.5) / items.length;
+      const { subs } = this.cluster[cat];
+      items.forEach((node, gi) => {
+        // sequential chunks of CAP → item #11 opens the second branch, and so on
+        const sub = subs[Math.min(Math.floor(gi / CAP), subs.length - 1)]!;
+        const { center, R } = sub;
+        const i = gi % CAP;
+        const t = (i + 0.5) / sub.count;
         const y = (1 - 2 * t) * 0.7;
         const rad = Math.sqrt(1 - y * y) * R * 0.85;
         const th = golden * i;
@@ -617,7 +669,7 @@ export class SkillTreeScene {
           return;
         }
       }
-      const chits = this.ray.intersectObjects([...this.clusterHit.values()]);
+      const chits = this.ray.intersectObjects([...this.clusterHit.values()].flat());
       if (chits.length) {
         this.cb.onItemSelected?.(null);
         this.focusCluster(chits[0]!.object.userData.cat as ItemKind);
