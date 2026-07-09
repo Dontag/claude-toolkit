@@ -1,6 +1,6 @@
 // Galaxy tab — the shared universe. Star systems per user, realtime updates,
 // graft-a-fruit installs. Falls back to a teaser when no backend is configured.
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { galaxyConfigured } from "../lib/supabase";
 import { fetchGalaxy, fetchItemContent, graftItem, subscribeGalaxy, useGalaxy, type GalaxyItem } from "../lib/galaxy";
 import { joinGalaxyPresence, usePresence, userColor } from "../lib/presence";
@@ -10,8 +10,11 @@ import { useUi } from "../stores/ui";
 import { RefreshButton } from "./RefreshButton";
 import { HudFrame } from "./HudFrame";
 import { requestChanges, useAccess } from "../lib/access";
+import { proposeChange } from "../lib/proposals";
 import { fmtCountdown, useCountdown } from "../lib/useCountdown";
 import { confirm } from "../stores/confirm";
+
+const Editor = lazy(() => import("./Editor").then((m) => ({ default: m.Editor })));
 
 const KIND_COLOR: Record<string, string> = {
   skill: "#ff6b7a",
@@ -78,6 +81,11 @@ function GalaxyLive() {
   const [selected, setSelected] = useState<GalaxyItem | null>(null);
   const [content, setContent] = useState<string | null>(null);
   const [grafting, setGrafting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const uid = useSession((s) => s.session?.user.id);
+  const myGrant = useAccess((s) => (selected ? s.grants.get(selected.id) : undefined));
+  const canEdit = !!selected && !!myGrant && myGrant.granteeId === uid;
   const items = useGalaxy((s) => s.items);
   const loading = useGalaxy((s) => s.loading);
   const galaxyError = useGalaxy((s) => s.error);
@@ -223,6 +231,17 @@ function GalaxyLive() {
               {grafting ? "Grafting…" : "🌱 Graft onto my tree"}
             </button>
             <RequestChangesButton item={selected} />
+            {canEdit && (
+              <button
+                className="btn"
+                onClick={() => {
+                  setDraft(content ?? "");
+                  setEditing(true);
+                }}
+              >
+                ✏️ Edit (propose)
+              </button>
+            )}
           </div>
           <GrantStatus itemId={selected.id} />
           {content !== null && (
@@ -241,6 +260,43 @@ function GalaxyLive() {
               The galaxy is empty — be the first star. Share a skill from Personal Space with the
               <strong> Share to Galaxy</strong> toggle.
             </p>
+          </div>
+        </div>
+      )}
+
+      {editing && selected && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 p-8 backdrop-blur-sm">
+          <div className="flex h-full w-full max-w-3xl flex-col rounded-2xl border border-border bg-[#0b0f22] p-4 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-semibold">
+                Proposing changes to <span className="font-mono text-brand2">{selected.name}</span>
+                <span className="ml-2 text-[11px] text-amber-300">the owner must approve before it goes live</span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className="btn-primary"
+                  disabled={!draft.trim() || draft === content}
+                  onClick={async () => {
+                    const r = await proposeChange(selected.id, draft);
+                    if (r === "ok") {
+                      showToast("📨 Change proposed — awaiting the owner's approval");
+                      setEditing(false);
+                    } else if (r === "empty") showToast("A skill can't be made empty");
+                    else showToast("Couldn't propose — is your window still open?");
+                  }}
+                >
+                  📨 Submit proposal
+                </button>
+                <button className="btn" onClick={() => setEditing(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1">
+              <Suspense fallback={<div className="p-4 text-xs text-muted">Loading editor…</div>}>
+                <Editor initial={content ?? ""} onChange={setDraft} />
+              </Suspense>
+            </div>
           </div>
         </div>
       )}

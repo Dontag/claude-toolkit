@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { galaxyConfigured } from "../lib/supabase";
 import { useSession } from "../stores/session";
+import { useSettings } from "../lib/settings";
 import { useUi } from "../stores/ui";
 import {
   denyRequest,
@@ -9,6 +10,7 @@ import {
   useAccess,
   type AppNotification,
 } from "../lib/access";
+import { approveProposal, rejectProposal, useProposals, type Proposal } from "../lib/proposals";
 
 const NOTE_TEXT: Record<string, (p: Record<string, unknown>) => string> = {
   grant_opened: () => "Your change request was granted — you have a 30-minute write window.",
@@ -19,19 +21,22 @@ const NOTE_TEXT: Record<string, (p: Record<string, unknown>) => string> = {
 
 export function AccessCenter() {
   const session = useSession((s) => s.session);
+  const notificationsOn = useSettings((s) => s.notifications);
   const incoming = useAccess((s) => s.incoming);
   const outgoing = useAccess((s) => s.outgoing);
   const notifications = useAccess((s) => s.notifications);
   const unread = useAccess((s) => s.unread);
+  const proposals = useProposals((s) => s.pendingForMe);
   const showToast = useUi((s) => s.showToast);
   const [open, setOpen] = useState(false);
+  const [review, setReview] = useState<Proposal | null>(null);
 
   useEffect(() => {
     if (open && unread > 0) void markNotificationsRead();
   }, [open, unread]);
 
-  if (!galaxyConfigured || !session) return null;
-  const pending = incoming.length;
+  if (!galaxyConfigured || !session || !notificationsOn) return null;
+  const pending = incoming.length + proposals.length;
   const badge = unread + pending;
 
   return (
@@ -85,6 +90,42 @@ export function AccessCenter() {
             </section>
           )}
 
+          {proposals.length > 0 && (
+            <section className="mb-3">
+              <div className="hud-label mb-1">Changes awaiting your approval</div>
+              {proposals.map((p) => (
+                <div key={p.id} className="mb-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-2">
+                  <div className="text-xs">
+                    <strong>@{p.proposerHandle ?? "someone"}</strong> edited{" "}
+                    <span className="text-brand2">{p.itemName}</span>
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <button className="btn text-[11px]" onClick={() => setReview(p)}>
+                      Review
+                    </button>
+                    <button
+                      className="btn-primary text-[11px]"
+                      onClick={async () => {
+                        if (await approveProposal(p)) showToast(`✅ Applied — ${p.itemName} updated`);
+                        else showToast("Couldn't approve");
+                      }}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      className="btn-danger text-[11px]"
+                      onClick={async () => {
+                        if (await rejectProposal(p.id)) showToast("Proposal rejected");
+                      }}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
+
           {outgoing.length > 0 && (
             <section className="mb-3">
               <div className="hud-label mb-1">Your requests</div>
@@ -107,6 +148,45 @@ export function AccessCenter() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {review && (
+        <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 p-8 backdrop-blur-sm" onClick={() => setReview(null)}>
+          <div className="hud-panel flex h-full max-h-[560px] w-full max-w-2xl flex-col p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="hud-label">
+                Proposed by @{review.proposerHandle} · {review.itemName}
+              </span>
+              <button className="btn-ghost" onClick={() => setReview(null)}>
+                ✕
+              </button>
+            </div>
+            <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-black/30 p-3 font-mono text-[11px] text-muted">
+              {review.content}
+            </pre>
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                className="btn-danger"
+                onClick={async () => {
+                  if (await rejectProposal(review.id)) showToast("Proposal rejected");
+                  setReview(null);
+                }}
+              >
+                Reject
+              </button>
+              <button
+                className="btn-primary"
+                onClick={async () => {
+                  if (await approveProposal(review)) showToast(`✅ Applied — ${review.itemName} updated`);
+                  else showToast("Couldn't approve");
+                  setReview(null);
+                }}
+              >
+                Approve — replace my {review.itemName}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -1,8 +1,22 @@
 # Claude Dev Toolkit
 
-A drop-in `.claude/` productivity pack: skills, subagents, hooks, and slash commands covering the full development lifecycle — design → build → test → review → ship → patch/tickets — plus token-saving rules and a 3D skill-tree dashboard.
+A drop-in `.claude/` productivity pack **and** a desktop app that renders your Claude setup as a living 3D world.
 
-## Install
+- **The toolkit** — skills, subagents, hooks, and slash commands covering design → build → test → review → ship → patch/tickets, plus token-saving rules.
+- **The desktop app** (`apps/desktop`, Tauri) — your `~/.claude` folder as a 3D tree that updates live; a **Galaxy** where each user is a solar system of shared items orbiting a black hole; per-item sharing, 30-minute exclusive edit windows, and propose-and-approve editing.
+- **The site** (`apps/site`, Astro) — auto-deployed marketing/download page.
+
+### 📖 Guides
+- **[DEV.md](DEV.md)** — full step-by-step: run the app, configure Supabase, env vars & feature flags, email, troubleshooting.
+- **[SETUP.md](SETUP.md)** — the short "turn the Galaxy on" checklist.
+
+Quick start for the desktop app:
+```bash
+pnpm install
+cd apps/desktop && pnpm tauri dev      # runs offline; add a .env for the Galaxy (see DEV.md)
+```
+
+## Install (toolkit only)
 
 Copy the contents into your project's `.claude/` folder (or `~/.claude/` for global use):
 

@@ -43,3 +43,24 @@ export async function rescanLocal(): Promise<void> {
   const fresh = await sourceState.local.scan();
   useInventory.getState().reconcile(fresh);
 }
+
+/** Create ~/.claude on demand (from demo mode) and go live. */
+export async function initClaudeFolder(): Promise<boolean> {
+  const local = await LocalFsSource.create();
+  if (!local) return false;
+  sourceState.local = local;
+  useInventory.getState().setAll(await local.scan(), "local", local.root);
+  await local.subscribe(async () => {
+    const fresh = await local.scan();
+    const events = useInventory.getState().reconcile(fresh);
+    for (const e of events) {
+      if (e.type === "removed") continue;
+      try {
+        await onLocalItemChanged(e.item, await local.readFile(e.item));
+      } catch {
+        /* transient */
+      }
+    }
+  });
+  return true;
+}

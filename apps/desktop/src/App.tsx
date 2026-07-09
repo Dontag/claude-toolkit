@@ -9,8 +9,13 @@ import { ItemPanel } from "./components/ItemPanel";
 import { AuthMenu } from "./components/AuthMenu";
 import { AccessCenter } from "./components/AccessCenter";
 import { AdminButton } from "./components/AdminPanel";
+import { AddItemDialog } from "./components/AddItemDialog";
+import { ConfigButton } from "./components/ConfigPanel";
 import { ConfirmDialog } from "./components/ConfirmDialog";
-import { refreshAccess, subscribeAccess } from "./lib/access";
+import { refreshAccess, subscribeAccess, useAccess } from "./lib/access";
+import { refreshProposals, subscribeProposals, useProposals } from "./lib/proposals";
+import { usePublish } from "./lib/publish";
+import { initClaudeFolder } from "./sources/bootstrap";
 
 // The Galaxy pulls in a second three.js scene + realtime — only load it when opened
 const GalaxyTab = lazy(() => import("./components/GalaxyTab").then((m) => ({ default: m.GalaxyTab })));
@@ -35,6 +40,7 @@ export default function App() {
   const onlineStatus = useConnection((s) => s.online);
   const searchRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   useEffect(() => {
     bootstrapInventory().finally(() => setReady(true));
@@ -67,8 +73,15 @@ export default function App() {
         joinGalaxyPresence();
         void refreshAccess();
         subscribeAccess();
+        void refreshProposals();
+        subscribeProposals();
       } else {
+        // sudden or intentional logout: drop realtime + clear stale cloud state
         leaveGalaxyPresence();
+        usePublish.setState({ shared: new Map() });
+        useAccess.setState({ incoming: [], outgoing: [], grants: new Map(), notifications: [], unread: 0 });
+        useProposals.setState({ pendingForMe: [] });
+        useUi.getState().showToast("Signed out — Galaxy is view-only until you sign back in");
       }
     };
     sync(!!useSession.getState().session);
@@ -172,6 +185,7 @@ export default function App() {
         <div className={`flex items-center gap-2 ${tab === "personal" ? "" : "ml-auto"}`}>
           <AdminButton />
           <AccessCenter />
+          <ConfigButton />
           <AuthMenu />
         </div>
         <button
@@ -183,7 +197,18 @@ export default function App() {
         >
           {freeNav ? "🧭 Free" : "🔒 Locked"}
         </button>
-        {tab === "personal" && mode === "local" && <RefreshButton onRefresh={rescanLocal} label="Rescan" />}
+        {tab === "personal" && mode === "local" && (
+          <>
+            <button
+              className="rounded-full border border-emerald-400/40 bg-black/30 px-3 py-1 text-[11px] text-emerald-300 transition hover:border-emerald-400"
+              title="Add a skill, agent, command or hook to your tree"
+              onClick={() => setAddOpen(true)}
+            >
+              ✚ Add
+            </button>
+            <RefreshButton onRefresh={rescanLocal} label="Rescan" />
+          </>
+        )}
         <button
           className="rounded-full border border-border bg-black/30 px-3 py-1 text-[11px] text-muted transition hover:border-brand hover:text-text"
           title={mode === "local" ? "Open your .claude folder" : "Demo mode"}
@@ -207,6 +232,20 @@ export default function App() {
             {ready && <TreeView />}
             <HudFrame accent="#5fae7d" />
             <ItemPanel />
+            {ready && mode === "demo" && (
+              <div className="absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-xl border border-emerald-400/40 bg-black/50 px-4 py-2 text-center text-[12px] text-emerald-200 backdrop-blur">
+                No <span className="font-mono">.claude</span> folder yet — you're viewing demo data.
+                <button
+                  className="ml-2 underline"
+                  onClick={async () => {
+                    if (await initClaudeFolder()) useUi.getState().showToast("🌱 Created ~/.claude — your tree is live");
+                    else useUi.getState().showToast("Couldn't create the folder");
+                  }}
+                >
+                  Set up ~/.claude
+                </button>
+              </div>
+            )}
             <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-border bg-black/30 px-4 py-1.5 text-[11px] text-muted backdrop-blur">
               Drag to rotate · Scroll to zoom · Click a fruit · <kbd>/</kbd> search · <kbd>Esc</kbd> resets · <kbd>Ctrl+R</kbd> rescan
             </div>
@@ -222,6 +261,7 @@ export default function App() {
         )}
       </main>
 
+      {addOpen && <AddItemDialog onClose={() => setAddOpen(false)} />}
       <ConfirmDialog />
 
       {toast && (

@@ -48,6 +48,19 @@ export class LocalFsSource {
     }
   }
 
+  /** Create ~/.claude and its kind subdirs, returning a live source. */
+  static async create(): Promise<LocalFsSource | null> {
+    try {
+      const root = await join(await homeDir(), ".claude");
+      for (const d of ["skills", "agents", "commands", "hooks"]) {
+        await mkdir(await join(root, d), { recursive: true });
+      }
+      return new LocalFsSource(root);
+    } catch {
+      return null;
+    }
+  }
+
   async scan(): Promise<ToolkitItem[]> {
     const items: ToolkitItem[] = [];
     for (const [dir, kind] of KIND_DIRS) {
@@ -150,9 +163,42 @@ export class LocalFsSource {
 
   /** Create a starter skill (used by the onboarding "plant your first fruit"). */
   async plantSkill(name: string, description: string): Promise<void> {
-    const dir = await join(this.root, "skills", name);
-    await mkdir(dir, { recursive: true });
-    await writeTextFile(await join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: ${description}\n---\n\n# ${name}\n\nDescribe when and how to use this skill.\n`);
+    await this.createItem("skill", name, `# ${name}\n\nDescribe when and how to use this skill.\n`, description);
+  }
+
+  /** Relative path a new item of a given kind + slug should live at. */
+  static pathFor(kind: ItemKind, slug: string): string {
+    switch (kind) {
+      case "skill":
+        return `skills/${slug}/SKILL.md`;
+      case "agent":
+        return `agents/${slug}.md`;
+      case "command":
+        return `commands/${slug}.md`;
+      case "hook":
+        return `hooks/${slug}.py`;
+    }
+  }
+
+  /**
+   * Create a new toolkit item on disk. `body` is the user's content; if it has
+   * no frontmatter and the kind expects it (skill/agent/command), a minimal
+   * `name`/`description` block is prepended so the tree + Galaxy read it right.
+   */
+  async createItem(kind: ItemKind, slug: string, body: string, description = ""): Promise<string> {
+    const rel = LocalFsSource.pathFor(kind, slug);
+    let content = body;
+    if (kind !== "hook" && !/^---\r?\n/.test(body.trimStart())) {
+      const displayName = kind === "command" ? `/${slug}` : slug;
+      content = `---\nname: ${displayName}\ndescription: ${description || slug}\n---\n\n${body}`;
+    }
+    await this.writeNewFile(rel, content);
+    return rel;
+  }
+
+  /** True if an item of this kind+slug already exists (avoid clobbering). */
+  async itemExists(kind: ItemKind, slug: string): Promise<boolean> {
+    return exists(await join(this.root, LocalFsSource.pathFor(kind, slug)));
   }
 }
 
