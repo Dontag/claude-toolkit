@@ -1,0 +1,14 @@
+{
+  "guard.py": {
+    "name": "command-guard",
+    "description": "PreToolUse guard: blocks rm -rf /, force-push, DROP TABLE and other destructive commands before execution."
+  },
+  "session_logger.py": {
+    "name": "session-logger",
+    "description": "Stop hook: appends a session entry (date, approx tokens) to activity/changelog.jsonl."
+  },
+  "HOOKS.md": {
+    "name": "auto-format",
+    "description": "PostToolUse hook wiring: Prettier/black on every edit — zero tokens on formatting (see settings-hooks.json)."
+  }
+}

@@ -1,0 +1,59 @@
+---
+import Base from "../layouts/Base.astro";
+import { KIND_META, loadInventory, loadReleases } from "../lib/data";
+
+const inv = loadInventory();
+const releases = loadReleases();
+const latest = releases[0] ?? null;
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const counts = { skill: 0, agent: 0, hook: 0, command: 0 } as Record<string, number>;
+for (const it of inv.items) counts[it.kind] = (counts[it.kind] ?? 0) + 1;
+---
+<Base title="Claude Toolkit — your Claude setup as a living 3D tree">
+  <section style="padding:34px 0 10px;text-align:center">
+    <div class="badge" style="color:var(--brand2);margin-bottom:18px">Desktop app · Windows / macOS / Linux</div>
+    <h1>Your Claude Code setup,<br />as a <span style="background:linear-gradient(135deg,var(--brand),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent">living 3D tree</span></h1>
+    <p class="lead" style="margin:18px auto 0">
+      Skills, agents, hooks and commands grow as fruits on a tree floating in a dynamic galaxy.
+      Watch your <code>~/.claude</code> folder change in real time, edit files in-app,
+      and share your best skills to the global Galaxy.
+    </p>
+    <div style="display:flex;gap:12px;justify-content:center;margin-top:28px;flex-wrap:wrap">
+      <a class="btn primary" href={`${base}/download`}>{latest ? `⬇ Download v${latest.version}` : "⬇ Download (coming soon)"}</a>
+      <a class="btn" href={`${base}/dashboard/`}>🌐 Try the web demo</a>
+    </div>
+  </section>
+
+  <section style="margin-top:56px">
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">
+      {Object.entries(KIND_META).map(([kind, m]) => (
+        <div class="card" style="text-align:center">
+          <div style="font-size:30px">{m.emoji}</div>
+          <div style={`font-size:30px;font-weight:800;color:${m.color}`}>{counts[kind]}</div>
+          <div style="color:var(--muted);font-size:13px">{m.label} in the starter toolkit</div>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section>
+    <h2>Why a tree?</h2>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+      <div class="card"><strong>🌱 Personal Space</strong><p style="color:var(--muted);font-size:14px;margin-top:6px">Bound directly to your <code>.claude</code> folder. Add a skill file — a fruit grows. Delete one — it falls. Live, always.</p></div>
+      <div class="card"><strong>🌌 Galaxy</strong><p style="color:var(--muted);font-size:14px;margin-top:6px">A shared universe of everyone's published items. Share a single skill with one toggle, sync changes with one switch, graft other people's fruits onto your tree.</p></div>
+      <div class="card"><strong>🔐 Change windows</strong><p style="color:var(--muted);font-size:14px;margin-top:6px">Only you can edit your items. Others request changes — a grant opens an exclusive 30-minute write window, then control returns to you.</p></div>
+      <div class="card"><strong>☄️ Alive by design</strong><p style="color:var(--muted);font-size:14px;margin-top:6px">Comets and asteroids streak across the galaxy as the community works — the more users online, the more the sky moves.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Get started in 30 seconds</h2>
+    <div class="card" style="font-family:ui-monospace,Consolas,monospace;font-size:14px;line-height:2">
+      <div><span style="color:var(--muted)"># 1. grab the starter toolkit</span></div>
+      <div>git clone https://github.com/Dontag/claude-toolkit</div>
+      <div><span style="color:var(--muted)"># 2. copy what you want into ~/.claude/</span></div>
+      <div>cp -r claude-toolkit/&#123;skills,agents,commands,hooks&#125; ~/.claude/</div>
+      <div><span style="color:var(--muted)"># 3. download the app and watch it grow</span></div>
+    </div>
+  </section>
+</Base>

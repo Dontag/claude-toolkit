@@ -69,8 +69,24 @@ Open `dashboard/index.html` directly in any browser (no server needed).
 - **Local** (opened via `file://` or `localhost`): full mode — you can remove items (apple-fall) and restore them. Removals persist in your browser's localStorage; the actual `.md` skill files in your Claude folder are managed separately (by you or Claude) — `data.js` is the single source the tree renders from.
 - **Hosted** (GitHub Pages or any `https://` domain): automatically view-only. Remove/Restore are disabled and a 🔒 badge shows; everyone can browse the tree, changelog, and stats but can't change anything.
 
-### Publish to GitHub Pages
-1. Push this repo (or just the `dashboard/` folder) to GitHub.
-2. Repo → Settings → Pages → Source: `Deploy from a branch` → pick branch + folder (`/ (root)` or `/docs` — if using `/docs`, rename `dashboard/` to `docs/`).
-3. Your tree is live at `https://<user>.github.io/<repo>/dashboard/` (view-only by design).
-4. To update the public tree, edit `data.js` and push — no build step needed.
+### Publishing — automatic
+The site deploys itself. `.github/workflows/site.yml` runs on every push to `main` (and on each app release): it regenerates the toolkit inventory from `skills/`, `agents/`, `commands/`, `hooks/`, pulls release download links from the GitHub API, builds the Astro site in `apps/site/`, and deploys to GitHub Pages — zero manual editing. One-time setup: repo → Settings → Pages → Source: **GitHub Actions**.
+
+- Marketing/download site: `https://<user>.github.io/<repo>/`
+- Legacy 3D dashboard (kept working): `https://<user>.github.io/<repo>/dashboard/`
+
+## Monorepo layout
+
+The repo is evolving into a desktop product (Tauri v2 app + Supabase backend). Structure:
+
+| Path | What |
+|---|---|
+| `skills/` `agents/` `commands/` `hooks/` | The toolkit content (unchanged — copy into `.claude/`) |
+| `dashboard/` | Legacy single-file 3D web demo (frozen) |
+| `activity/changelog.jsonl` | Append-only activity log (session-logger hook writes here) |
+| `apps/site/` | Astro marketing/download site (auto-deployed to Pages) |
+| `apps/desktop/` | Tauri v2 desktop app — the 3D tree bound to your real `~/.claude` |
+| `packages/core/` | Shared TypeScript: schemas, frontmatter parser, source interfaces |
+| `scripts/generate-inventory.mjs` | Scans toolkit content → `inventory.json` (site + app demo data) |
+
+Dev: `pnpm install`, then `pnpm generate && pnpm --filter @claude-toolkit/site dev` for the site.

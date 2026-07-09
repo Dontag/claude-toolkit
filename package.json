@@ -1,0 +1,19 @@
+{
+  "name": "claude-toolkit-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.34.4",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "gray-matter": "^4.0.3",
+    "zod": "^3.24.1"
+  },
+  "scripts": {
+    "generate": "node scripts/generate-inventory.mjs",
+    "typecheck": "pnpm -r typecheck",
+    "build": "pnpm run generate && pnpm -r build",
+    "test": "pnpm -r test"
+  }
+}

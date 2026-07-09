@@ -1,0 +1,41 @@
+---
+import Base from "../layouts/Base.astro";
+import { KIND_META, loadInventory } from "../lib/data";
+
+const inv = loadInventory();
+const kinds = ["skill", "agent", "hook", "command"] as const;
+const raw = (p: string) => `${inv.repoBase.replace("github.com", "raw.githubusercontent.com")}/main/${p}`;
+const gh = (p: string) => `${inv.repoBase}/blob/main/${p}`;
+---
+<Base title="Toolkit — Claude Toolkit">
+  <h1>What's in the toolkit</h1>
+  <p class="lead" style="margin-top:10px">
+    {inv.items.length} battle-tested skills, agents, hooks and commands — the starter pack the app ships with.
+    This page regenerates automatically from the repo on every push.
+  </p>
+
+  {kinds.map((kind) => {
+    const meta = KIND_META[kind];
+    const items = inv.items.filter((i) => i.kind === kind);
+    return (
+      <section>
+        <h2 style={`color:${meta.color}`}>{meta.emoji} {meta.label} <span style="color:var(--muted);font-weight:400;font-size:15px">({items.length})</span></h2>
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+          {items.map((it) => (
+            <div class="card">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+                <strong style="font-size:15px">{it.name}</strong>
+                <span style="color:var(--muted);font-size:11.5px;white-space:nowrap">{it.added}</span>
+              </div>
+              <p style="color:var(--muted);font-size:13.5px;margin:6px 0 10px">{it.description}</p>
+              <div style="display:flex;gap:12px;font-size:12.5px">
+                <a href={gh(it.path)}>View source</a>
+                <a href={raw(it.path)} download>Raw file</a>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  })}
+</Base>

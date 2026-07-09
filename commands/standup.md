@@ -1,6 +1,6 @@
 ---
 description: Daily standup summary — what shipped, what's in flight, what's blocked
-argument-hint: [days back, default 1]
+argument-hint: "[days back, default 1]"
 ---
 
 Generate a standup summary for the last $ARGUMENTS day(s) (default 1):

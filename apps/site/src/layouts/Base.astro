@@ -1,0 +1,94 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+}
+const { title, description = "Claude Toolkit — a living 3D skill tree for your Claude Code setup." } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const nav = [
+  { href: `${base}/`, label: "Home" },
+  { href: `${base}/download`, label: "Download" },
+  { href: `${base}/toolkit`, label: "Toolkit" },
+  { href: `${base}/changelog`, label: "Changelog" },
+  { href: `${base}/dashboard/`, label: "Web demo ↗" },
+];
+const path = Astro.url.pathname;
+---
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content={description} />
+  <title>{title}</title>
+  <style is:global>
+    :root{
+      --bg0:#05070f; --bg1:#0b0f22; --bg2:#141a33;
+      --text:#e7e9f4; --muted:#9aa3c7; --border:rgba(151,161,204,.16);
+      --glass:rgba(20,26,51,.55); --brand:#8f83ff; --brand2:#7ce7f5;
+      --skill:#ff6b7a; --agent:#ffb057; --hook:#a78bfa; --command:#38d3e8; --success:#34d399;
+    }
+    *{margin:0;padding:0;box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      color:var(--text);font:16px/1.6 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+      background:radial-gradient(120% 90% at 50% 0%,var(--bg2) 0%,var(--bg1) 45%,var(--bg0) 100%);
+      background-attachment:fixed;min-height:100vh;
+    }
+    a{color:var(--brand2);text-decoration:none}
+    a:hover{text-decoration:underline}
+    .wrap{max-width:1040px;margin:0 auto;padding:0 24px}
+    header.site{position:sticky;top:0;z-index:10;backdrop-filter:blur(14px);
+      background:rgba(5,7,15,.6);border-bottom:1px solid var(--border)}
+    header.site .wrap{display:flex;align-items:center;gap:22px;height:60px}
+    .logo{font-weight:700;letter-spacing:-.02em;color:var(--text);font-size:17px}
+    .logo:hover{text-decoration:none}
+    nav.main{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+    nav.main a{color:var(--muted);font-size:13.5px;padding:7px 12px;border-radius:9px;transition:all .15s}
+    nav.main a:hover{color:var(--text);background:rgba(143,131,255,.1);text-decoration:none}
+    nav.main a.active{color:var(--text);background:rgba(143,131,255,.16)}
+    main{padding:48px 0 80px}
+    h1{font-size:clamp(28px,5vw,44px);letter-spacing:-.03em;line-height:1.15}
+    h2{font-size:22px;letter-spacing:-.02em;margin:40px 0 14px}
+    p.lead{color:var(--muted);font-size:18px;max-width:640px}
+    .btn{display:inline-block;border:1px solid var(--border);background:var(--glass);color:var(--text);
+      border-radius:12px;padding:11px 20px;font-size:14.5px;font-weight:600;transition:all .15s;cursor:pointer}
+    .btn:hover{border-color:var(--brand);box-shadow:0 0 0 3px rgba(143,131,255,.18);text-decoration:none;transform:translateY(-1px)}
+    .btn.primary{background:linear-gradient(135deg,var(--brand),#6f5cf0);border-color:transparent}
+    .card{background:var(--glass);border:1px solid var(--border);border-radius:16px;padding:20px 22px}
+    .grid{display:grid;gap:14px}
+    .badge{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+      padding:3px 9px;border-radius:99px;border:1px solid var(--border)}
+    footer.site{border-top:1px solid var(--border);padding:26px 0;color:var(--muted);font-size:13px}
+    .stars{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.5;
+      background-image:
+        radial-gradient(1px 1px at 12% 22%,#fff8 0,transparent 100%),
+        radial-gradient(1px 1px at 68% 12%,#fff6 0,transparent 100%),
+        radial-gradient(1.5px 1.5px at 84% 42%,#b4aaff88 0,transparent 100%),
+        radial-gradient(1px 1px at 32% 66%,#fff5 0,transparent 100%),
+        radial-gradient(1.5px 1.5px at 52% 88%,#7ce7f588 0,transparent 100%),
+        radial-gradient(1px 1px at 92% 78%,#fff7 0,transparent 100%),
+        radial-gradient(1px 1px at 8% 92%,#fff5 0,transparent 100%);
+    }
+    @media (max-width:640px){ header.site .wrap{height:auto;padding:10px 16px;flex-wrap:wrap} }
+  </style>
+</head>
+<body>
+  <div class="stars"></div>
+  <header class="site">
+    <div class="wrap">
+      <a class="logo" href={`${base}/`}>🌳 Claude Toolkit</a>
+      <nav class="main">
+        {nav.map((n) => <a href={n.href} class={path === n.href || path === `${n.href}/` ? "active" : ""}>{n.label}</a>)}
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+    <slot />
+  </main>
+  <footer class="site">
+    <div class="wrap">
+      Open source · <a href="https://github.com/Dontag/claude-toolkit">GitHub</a> · Built with Claude Code
+    </div>
+  </footer>
+</body>
+</html>

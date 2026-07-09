@@ -1,6 +1,6 @@
 ---
 description: Resolve a ticket end-to-end (reproduce → fix → test → PR → close loop)
-argument-hint: <ticket-id or description>
+argument-hint: "<ticket-id or description>"
 ---
 
 Resolve ticket: $ARGUMENTS

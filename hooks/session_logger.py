@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Stop hook: appends a session entry to the dashboard's data.js changelog.
-Reads hook payload from stdin; counts transcript size as a rough token proxy.
-Safe no-op if the dashboard isn't present.
+"""Stop hook: appends a session entry to activity/changelog.jsonl (append-only,
+crash-safe, git-mergeable). Reads hook payload from stdin; counts transcript
+size as a rough token proxy. Creates the activity dir if missing.
 """
 import datetime
 import json
 import os
-import re
 import sys
 
-DATA_JS = os.path.join(os.path.dirname(__file__), "..", "dashboard", "data.js")
+ACTIVITY_DIR = os.path.join(os.path.dirname(__file__), "..", "activity")
+LOG_PATH = os.path.join(ACTIVITY_DIR, "changelog.jsonl")
 
 def main():
     try:
@@ -21,10 +21,6 @@ def main():
     if transcript and os.path.exists(transcript):
         approx_tokens = os.path.getsize(transcript) // 4  # ~4 chars/token heuristic
 
-    path = os.path.abspath(DATA_JS)
-    if not os.path.exists(path):
-        sys.exit(0)
-
     entry = {
         "date": datetime.date.today().isoformat(),
         "title": "Session completed",
@@ -32,18 +28,9 @@ def main():
         "tokensSaved": 0,
         "type": "session",
     }
-    with open(path, "r", encoding="utf-8") as f:
-        content = f.read()
-    # Insert at the top of the changelog array.
-    new_content, n = re.subn(
-        r"(changelog:\s*\[)",
-        lambda m: m.group(1) + "\n    " + json.dumps(entry) + ",",
-        content,
-        count=1,
-    )
-    if n:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(new_content)
+    os.makedirs(os.path.abspath(ACTIVITY_DIR), exist_ok=True)
+    with open(os.path.abspath(LOG_PATH), "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry) + "\n")
     sys.exit(0)
 
 if __name__ == "__main__":

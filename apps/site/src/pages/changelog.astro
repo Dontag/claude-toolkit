@@ -1,0 +1,31 @@
+---
+import Base from "../layouts/Base.astro";
+import { loadInventory } from "../lib/data";
+
+const inv = loadInventory();
+const typeColors: Record<string, string> = {
+  feature: "var(--brand)", fix: "var(--success)", skill: "var(--skill)",
+  session: "var(--muted)", release: "var(--command)",
+};
+const tokens = inv.changelog.reduce((s, e) => s + (e.tokensSaved || 0), 0);
+---
+<Base title="Changelog — Claude Toolkit">
+  <h1>Changelog</h1>
+  <p class="lead" style="margin-top:10px">
+    Every change, auto-logged. Estimated tokens saved by toolkit discipline so far:
+    <strong style="color:var(--brand2)">{tokens.toLocaleString()}</strong>
+  </p>
+  <div class="grid" style="margin-top:26px;max-width:720px">
+    {inv.changelog.map((e) => (
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+          <span class="badge" style={`color:${typeColors[e.type] ?? "var(--muted)"}`}>{e.type}</span>
+          <span style="color:var(--muted);font-size:12.5px">{e.date}</span>
+        </div>
+        <strong style="display:block;margin-top:8px">{e.title}</strong>
+        <p style="color:var(--muted);font-size:13.5px;margin-top:4px">{e.detail}</p>
+        {e.tokensSaved > 0 && <div style="color:var(--brand2);font-size:12.5px;margin-top:6px">≈ {e.tokensSaved.toLocaleString()} tokens saved</div>}
+      </div>
+    ))}
+  </div>
+</Base>

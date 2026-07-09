@@ -1,0 +1,68 @@
+name: Deploy site
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # generator derives `added` dates from git history
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate inventory
+        run: node scripts/generate-inventory.mjs
+      - name: Generate releases.json from GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${{ github.repository }}/releases?per_page=20" | node -e '
+            const rels = JSON.parse(require("fs").readFileSync(0, "utf8"))
+              .filter(r => !r.draft && r.tag_name.startsWith("app-v"))
+              .map(r => ({
+                version: r.tag_name.replace(/^app-v/, ""),
+                publishedAt: r.published_at,
+                notes: r.body || "",
+                assets: r.assets
+                  .filter(a => !/latest\.json|\.sig$/.test(a.name))
+                  .map(a => ({ name: a.name, url: a.browser_download_url, size: a.size })),
+              }));
+            require("fs").writeFileSync("apps/site/public/data/releases.json", JSON.stringify(rels, null, 2));
+            console.log(`releases.json: ${rels.length} app release(s)`);
+          '
+      - name: Build site
+        run: pnpm --filter @claude-toolkit/site build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/site/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,6 +1,6 @@
 ---
 description: Audit a screen/component against the ui-ux-master + motion-animation checklists
-argument-hint: <path to component/page or route>
+argument-hint: "<path to component/page or route>"
 ---
 
 Audit target: $ARGUMENTS

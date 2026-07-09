@@ -1,6 +1,6 @@
 ---
 description: Pre-release pipeline — test, review, version, changelog, tag
-argument-hint: [patch|minor|major] (optional, else derived from commits)
+argument-hint: "[patch|minor|major] (optional, else derived from commits)"
 ---
 
 Prepare a release. Bump hint: $ARGUMENTS

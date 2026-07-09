@@ -1,6 +1,6 @@
 ---
 description: Build a feature end-to-end from an idea or PRD (plan → build → test → review)
-argument-hint: <feature description or path to PRD>
+argument-hint: "<feature description or path to PRD>"
 ---
 
 Build feature: $ARGUMENTS
