@@ -93,7 +93,7 @@ export async function hydrateSharedState(localItems: ToolkitItem[]): Promise<voi
 
 /** Share toggle ON: create/revive the cloud item and push the current content. */
 export async function shareItem(item: ToolkitItem, content: string): Promise<boolean> {
-  if (!supabase) return false;
+  if (!supabase || !navigator.onLine) return false;
   const uid = useSession.getState().session?.user.id;
   const toolkitId = await myToolkitId();
   if (!uid || !toolkitId) return false;
@@ -151,6 +151,11 @@ export async function pushVersion(item: ToolkitItem, content: string): Promise<b
   const uid = useSession.getState().session?.user.id;
   const meta = usePublish.getState().shared.get(item.id);
   if (!uid || !meta) return false;
+  if (!navigator.onLine) {
+    // keep the "local ahead" flag so the user can Push when back online
+    setMeta(item.id, { ...meta, localAhead: true });
+    return false;
+  }
   setBusy(item.id, true);
   try {
     const hash = await sha256(content);

@@ -35,3 +35,11 @@ export async function bootstrapInventory(): Promise<void> {
     inv.setAll(await loadDemoInventory(), "demo", "demo data — no .claude folder found");
   }
 }
+
+/** Manual rescan of the local tree (used by the Rescan button, catches any
+ * change the OS watcher may have missed). No-op in demo mode. */
+export async function rescanLocal(): Promise<void> {
+  if (!sourceState.local) return;
+  const fresh = await sourceState.local.scan();
+  useInventory.getState().reconcile(fresh);
+}

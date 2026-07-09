@@ -57,10 +57,22 @@ export const useSession = create<SessionState>((set) => ({
 
   signInWithEmail: async (email, password) => {
     if (!supabase) return false;
+    if (!navigator.onLine) {
+      set({ authError: "You're offline — connect to the internet to sign in" });
+      return false;
+    }
     set({ authBusy: true, authError: null, authNotice: null });
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    set({ authBusy: false, authError: error?.message ?? null });
-    return !error;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const msg = /email not confirmed/i.test(error?.message ?? "")
+        ? "Email not confirmed. Check your inbox, or turn off 'Confirm email' in Supabase for testing."
+        : (error?.message ?? null);
+      set({ authBusy: false, authError: msg });
+      return !error;
+    } catch {
+      set({ authBusy: false, authError: "Sign-in failed — check your connection and retry" });
+      return false;
+    }
   },
 
   signUpWithEmail: async (email, password) => {
@@ -84,30 +96,59 @@ export const useSession = create<SessionState>((set) => ({
 
   completeOAuth: async (url) => {
     if (!supabase) return;
-    const code = new URL(url).searchParams.get("code");
-    if (!code) {
-      set({ authBusy: false, authError: "Sign-in was cancelled" });
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      set({ authBusy: false, authError: "Received a malformed sign-in link" });
       return;
     }
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    set({ authBusy: false, authError: error?.message ?? null });
+    // Supabase appends ?error=...&error_description=... on provider failure
+    const params = parsed.searchParams;
+    const err = params.get("error_description") ?? params.get("error");
+    if (err) {
+      set({ authBusy: false, authError: decodeURIComponent(err.replace(/\+/g, " ")) });
+      return;
+    }
+    const code = params.get("code");
+    if (!code) {
+      set({ authBusy: false, authError: "Sign-in was cancelled or timed out" });
+      return;
+    }
+    try {
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      set({ authBusy: false, authError: error?.message ?? null });
+    } catch {
+      set({ authBusy: false, authError: "Couldn't complete sign-in — check your connection and retry" });
+    }
   },
 }));
 
+async function safeLoadProfile(userId: string) {
+  try {
+    const profile = await loadProfile(userId);
+    useSession.setState({ profile });
+  } catch {
+    /* profile fetch can fail offline; session still valid, retry on next event */
+  }
+}
+
 // keep the store in lock-step with supabase-js
 if (supabase) {
-  supabase.auth.onAuthStateChange((_event, session) => {
+  supabase.auth.onAuthStateChange((event, session) => {
     useSession.setState({ session, authBusy: false });
-    if (session) {
-      void loadProfile(session.user.id).then((profile) => useSession.setState({ profile }));
-    } else {
-      useSession.setState({ profile: null });
-    }
+    if (session) void safeLoadProfile(session.user.id);
+    else useSession.setState({ profile: null });
+    // a failed silent token refresh signs the user out — tell them why
+    if (event === "SIGNED_OUT") useSession.setState({ authNotice: null });
   });
-  void supabase.auth.getSession().then(({ data }) => {
-    useSession.setState({ session: data.session });
-    if (data.session) {
-      void loadProfile(data.session.user.id).then((profile) => useSession.setState({ profile }));
-    }
-  });
+  supabase.auth.getSession().then(
+    ({ data }) => {
+      useSession.setState({ session: data.session });
+      if (data.session) void safeLoadProfile(data.session.user.id);
+    },
+    () => {
+      /* offline at boot — onAuthStateChange will catch up when back online */
+    },
+  );
 }

@@ -8,6 +8,10 @@ import { TreeView, sceneRef } from "./components/TreeView";
 import { ItemPanel } from "./components/ItemPanel";
 import { GalaxyTab } from "./components/GalaxyTab";
 import { AuthMenu } from "./components/AuthMenu";
+import { RefreshButton } from "./components/RefreshButton";
+import { rescanLocal } from "./sources/bootstrap";
+import { refreshRemaining, useConnection } from "./stores/connection";
+import { fetchGalaxy } from "./lib/galaxy";
 import { checkForUpdates } from "./updater";
 import { useSession } from "./stores/session";
 import { hydrateSharedState } from "./lib/publish";
@@ -20,6 +24,7 @@ export default function App() {
   const mode = useInventory((s) => s.mode);
   const rootLabel = useInventory((s) => s.rootLabel);
   const count = useInventory((s) => s.items.size);
+  const onlineStatus = useConnection((s) => s.online);
   const searchRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
 
@@ -74,6 +79,28 @@ export default function App() {
     [],
   );
 
+  // surface auth-callback failures even when the sign-in menu is closed
+  useEffect(
+    () =>
+      useSession.subscribe((s, prev) => {
+        if (s.authError && s.authError !== prev.authError) useUi.getState().showToast(s.authError);
+      }),
+    [],
+  );
+
+  // back online → refresh galaxy + re-learn shared state
+  useEffect(() => {
+    const onOnline = () => {
+      useUi.getState().showToast("Back online");
+      if (useSession.getState().session) {
+        void hydrateSharedState([...useInventory.getState().items.values()]);
+        if (galaxyConfigured) void fetchGalaxy();
+      }
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.tagName === "INPUT") {
@@ -86,6 +113,18 @@ export default function App() {
       } else if (e.key === "Escape") {
         useUi.getState().select(null);
         sceneRef.current?.resetView();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
+        // rate-limited refresh via keyboard; the button owns the cooldown
+        e.preventDefault();
+        if (refreshRemaining() > 0) {
+          useUi.getState().showToast(`Please wait ${Math.ceil(refreshRemaining() / 1000)}s before refreshing`);
+        } else if (!useConnection.getState().online) {
+          useUi.getState().showToast("You're offline — reconnect to refresh");
+        } else {
+          useConnection.setState({ lastRefresh: Date.now() });
+          void (useUi.getState().tab === "galaxy" ? fetchGalaxy() : rescanLocal());
+          useUi.getState().showToast("Refreshed");
+        }
       }
     };
     window.addEventListener("keydown", onKey);
@@ -123,6 +162,7 @@ export default function App() {
         <div className={tab === "personal" ? "" : "ml-auto"}>
           <AuthMenu />
         </div>
+        {tab === "personal" && mode === "local" && <RefreshButton onRefresh={rescanLocal} label="Rescan" />}
         <button
           className="rounded-full border border-border bg-black/30 px-3 py-1 text-[11px] text-muted transition hover:border-brand hover:text-text"
           title={mode === "local" ? "Open your .claude folder" : "Demo mode"}
@@ -134,13 +174,19 @@ export default function App() {
         </button>
       </header>
 
+      {!onlineStatus && (
+        <div className="z-30 shrink-0 bg-amber-500/15 px-4 py-1 text-center text-[11px] text-amber-300">
+          ⚠ You're offline — Galaxy sharing and sync are paused. Local editing still works.
+        </div>
+      )}
+
       <main className="relative min-h-0 flex-1">
         {tab === "personal" ? (
           <>
             {ready && <TreeView />}
             <ItemPanel />
             <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-border bg-black/30 px-4 py-1.5 text-[11px] text-muted backdrop-blur">
-              Drag to rotate · Scroll to zoom · Click a fruit · <kbd>/</kbd> search · <kbd>Esc</kbd> resets
+              Drag to rotate · Scroll to zoom · Click a fruit · <kbd>/</kbd> search · <kbd>Esc</kbd> resets · <kbd>Ctrl+R</kbd> rescan
             </div>
           </>
         ) : (

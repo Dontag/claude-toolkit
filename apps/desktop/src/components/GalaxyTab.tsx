@@ -7,6 +7,7 @@ import { joinGalaxyPresence, usePresence, userColor } from "../lib/presence";
 import { GalaxyScene } from "../scene/galaxy-scene";
 import { useSession } from "../stores/session";
 import { useUi } from "../stores/ui";
+import { RefreshButton } from "./RefreshButton";
 
 const KIND_COLOR: Record<string, string> = {
   skill: "#ff6b7a",
@@ -25,8 +26,10 @@ function GalaxyLive() {
   const sceneRef = useRef<GalaxyScene | null>(null);
   const [selected, setSelected] = useState<GalaxyItem | null>(null);
   const [content, setContent] = useState<string | null>(null);
+  const [grafting, setGrafting] = useState(false);
   const items = useGalaxy((s) => s.items);
   const loading = useGalaxy((s) => s.loading);
+  const galaxyError = useGalaxy((s) => s.error);
   const online = usePresence((s) => s.onlineCount);
   const session = useSession((s) => s.session);
   const showToast = useUi((s) => s.showToast);
@@ -66,10 +69,22 @@ function GalaxyLive() {
   return (
     <div className="relative h-full">
       <div ref={ref} className="absolute inset-0 cursor-grab" />
-      <div className="pointer-events-none absolute left-4 top-4 z-10 rounded-full border border-border bg-black/30 px-4 py-1.5 text-[11px] text-muted backdrop-blur">
-        {loading ? "Scanning the galaxy…" : `${items.length} shared items · ${online} online`}
-        {!session && " · sign in to share yours"}
+      <div className="absolute left-4 top-4 z-10 flex items-center gap-2">
+        <div className="pointer-events-none rounded-full border border-border bg-black/30 px-4 py-1.5 text-[11px] text-muted backdrop-blur">
+          {loading ? "Scanning the galaxy…" : `${items.length} shared items · ${online} online`}
+          {!session && " · sign in to share yours"}
+        </div>
+        <RefreshButton onRefresh={fetchGalaxy} label="Refresh" />
       </div>
+
+      {galaxyError && !loading && (
+        <div className="absolute left-1/2 top-16 z-10 -translate-x-1/2 rounded-xl border border-red-400/40 bg-black/50 px-4 py-2 text-[12px] text-red-300 backdrop-blur">
+          Couldn't reach the Galaxy: {galaxyError}
+          <button className="ml-2 underline" onClick={() => void fetchGalaxy()}>
+            retry
+          </button>
+        </div>
+      )}
 
       {selected && (
         <aside className="absolute right-4 top-4 z-10 w-[340px] max-h-[calc(100%-2rem)] overflow-y-auto rounded-2xl border border-border bg-glass p-4 backdrop-blur-xl shadow-2xl">
@@ -90,14 +105,25 @@ function GalaxyLive() {
           <div className="mt-3 flex gap-2">
             <button
               className="btn-primary"
+              disabled={grafting}
               onClick={async () => {
-                const r = await graftItem(selected);
-                if (r === "ok") showToast(`🌱 ${selected.name} grafted onto your tree`);
-                else if (r === "no-local") showToast("No local .claude folder to graft into");
-                else showToast("Graft failed — try again");
+                if (!navigator.onLine) {
+                  showToast("You're offline — reconnect to graft");
+                  return;
+                }
+                setGrafting(true);
+                try {
+                  const r = await graftItem(selected);
+                  if (r === "ok") showToast(`🌱 ${selected.name} grafted onto your tree`);
+                  else if (r === "no-local") showToast("No local .claude folder to graft into");
+                  else if (r === "no-content") showToast("This item has no content to graft yet");
+                  else showToast("Graft failed — try again");
+                } finally {
+                  setGrafting(false);
+                }
               }}
             >
-              🌱 Graft onto my tree
+              {grafting ? "Grafting…" : "🌱 Graft onto my tree"}
             </button>
           </div>
           {content !== null && (
