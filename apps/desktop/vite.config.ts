@@ -9,6 +9,27 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
 
+  build: {
+    // split heavy vendors so the initial chunk stays small and browsers can
+    // cache them independently (three + codemirror + supabase dominate size)
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          three: ["three"],
+          codemirror: [
+            "@codemirror/view",
+            "@codemirror/state",
+            "@codemirror/commands",
+            "@codemirror/lang-markdown",
+            "@codemirror/theme-one-dark",
+          ],
+          supabase: ["@supabase/supabase-js"],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 900,
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors

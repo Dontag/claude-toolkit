@@ -15,12 +15,22 @@ interface UiState {
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
+const TAB_KEY = "ct_last_tab";
+const savedTab = (typeof localStorage !== "undefined" && localStorage.getItem(TAB_KEY)) as Tab | null;
+
 export const useUi = create<UiState>((set) => ({
-  tab: "personal",
+  tab: savedTab === "galaxy" || savedTab === "personal" ? savedTab : "personal",
   selectedId: null,
   editorOpen: false,
   toast: null,
-  setTab: (tab) => set({ tab }),
+  setTab: (tab) => {
+    try {
+      localStorage.setItem(TAB_KEY, tab);
+    } catch {
+      /* ignore */
+    }
+    set({ tab, selectedId: null });
+  },
   select: (selectedId) => set({ selectedId, editorOpen: false }),
   setEditorOpen: (editorOpen) => set({ editorOpen }),
   showToast: (toast) => {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { galaxyConfigured } from "../lib/supabase";
 import { useSession } from "../stores/session";
+import { confirm } from "../stores/confirm";
 
 export function AuthMenu() {
   const session = useSession((s) => s.session);
@@ -26,7 +27,19 @@ export function AuthMenu() {
           </span>
         )}
         <span className="text-xs text-muted">@{profile?.handle ?? "…"}</span>
-        <button className="btn-ghost text-xs" title="Sign out" onClick={() => void useSession.getState().signOut()}>
+        <button
+          className="btn-ghost text-xs"
+          title="Sign out"
+          onClick={async () => {
+            const ok = await confirm({
+              title: "Sign out?",
+              message: "You'll stay signed in on the web, but the Galaxy will go view-only here until you sign back in.",
+              confirmLabel: "Sign out",
+              danger: true,
+            });
+            if (ok) void useSession.getState().signOut();
+          }}
+        >
           ⏻
         </button>
       </div>

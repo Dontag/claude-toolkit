@@ -1,13 +1,16 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { join } from "@tauri-apps/api/path";
 import { sourceState } from "../sources/bootstrap";
 import { useInventory } from "../stores/inventory";
 import { useUi } from "../stores/ui";
-import { Editor } from "./Editor";
+
+// CodeMirror is heavy — only pull it in when the user actually opens the editor
+const Editor = lazy(() => import("./Editor").then((m) => ({ default: m.Editor })));
 import { galaxyConfigured } from "../lib/supabase";
 import { useSession } from "../stores/session";
 import { pushVersion, setSync, shareItem, unshareItem, usePublish } from "../lib/publish";
+import { confirm } from "../stores/confirm";
 
 const KIND_COLOR: Record<string, string> = {
   skill: "#ff6b7a",
@@ -80,6 +83,20 @@ export function ItemPanel() {
     }
   };
 
+  const dirty = editorOpen && draft !== (content ?? "");
+  const cancelEdit = async () => {
+    if (dirty) {
+      const discard = await confirm({
+        title: "Discard unsaved changes?",
+        message: "Your edits to this file haven't been saved.",
+        confirmLabel: "Discard",
+        danger: true,
+      });
+      if (!discard) return;
+    }
+    useUi.getState().setEditorOpen(false);
+  };
+
   return (
     <>
       <aside className="hud-panel absolute right-4 top-16 z-10 w-[340px] max-h-[calc(100%-6rem)] overflow-y-auto p-4 backdrop-blur-xl">
@@ -149,23 +166,34 @@ export function ItemPanel() {
 
       {/* editor modal */}
       {editorOpen && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 p-8 backdrop-blur-sm">
+        <div
+          className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 p-8 backdrop-blur-sm"
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+              e.preventDefault();
+              void save();
+            }
+          }}
+        >
           <div className="flex h-full w-full max-w-3xl flex-col rounded-2xl border border-border bg-[#0b0f22] p-4 shadow-2xl">
             <div className="mb-3 flex items-center justify-between">
               <div className="text-sm font-semibold">
                 Editing <span className="font-mono text-brand2">{item.path}</span>
+                {dirty && <span className="ml-2 text-[11px] text-amber-300">● unsaved</span>}
               </div>
               <div className="flex gap-2">
-                <button className="btn-primary" onClick={save}>
-                  💾 Save
+                <button className="btn-primary" onClick={save} disabled={!dirty}>
+                  💾 Save <span className="opacity-60">Ctrl+S</span>
                 </button>
-                <button className="btn" onClick={() => useUi.getState().setEditorOpen(false)}>
+                <button className="btn" onClick={cancelEdit}>
                   Cancel
                 </button>
               </div>
             </div>
             <div className="min-h-0 flex-1">
-              <Editor initial={content ?? ""} onChange={setDraft} />
+              <Suspense fallback={<div className="p-4 text-xs text-muted">Loading editor…</div>}>
+                <Editor initial={content ?? ""} onChange={setDraft} />
+              </Suspense>
             </div>
           </div>
         </div>
@@ -193,6 +221,13 @@ function ShareControls({ itemId, content }: { itemId: string; content: string | 
   const toggleShare = async () => {
     if (content === null) return;
     if (meta) {
+      const ok = await confirm({
+        title: `Remove "${item.name}" from the Galaxy?`,
+        message: "It disappears from everyone's Galaxy. Version history is kept, so you can re-share later.",
+        confirmLabel: "Remove",
+        danger: true,
+      });
+      if (!ok) return;
       if (await unshareItem(item)) showToast(`🌑 ${item.name} removed from the Galaxy`);
       else showToast("Couldn't unshare — try again");
     } else {

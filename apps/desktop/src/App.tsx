@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { bootstrapInventory, sourceState } from "./sources/bootstrap";
@@ -6,8 +6,11 @@ import { useInventory } from "./stores/inventory";
 import { useUi } from "./stores/ui";
 import { TreeView, sceneRef } from "./components/TreeView";
 import { ItemPanel } from "./components/ItemPanel";
-import { GalaxyTab } from "./components/GalaxyTab";
 import { AuthMenu } from "./components/AuthMenu";
+import { ConfirmDialog } from "./components/ConfirmDialog";
+
+// The Galaxy pulls in a second three.js scene + realtime — only load it when opened
+const GalaxyTab = lazy(() => import("./components/GalaxyTab").then((m) => ({ default: m.GalaxyTab })));
 import { RefreshButton } from "./components/RefreshButton";
 import { HudFrame } from "./components/HudFrame";
 import { rescanLocal } from "./sources/bootstrap";
@@ -192,9 +195,17 @@ export default function App() {
             </div>
           </>
         ) : (
-          <GalaxyTab />
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center text-sm text-muted">Charting the galaxy…</div>
+            }
+          >
+            <GalaxyTab />
+          </Suspense>
         )}
       </main>
+
+      <ConfirmDialog />
 
       {toast && (
         <div className="pointer-events-none absolute bottom-14 left-1/2 z-40 -translate-x-1/2 rounded-xl border border-border bg-[#141a33] px-4 py-2 text-sm shadow-2xl">

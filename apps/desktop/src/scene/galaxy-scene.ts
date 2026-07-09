@@ -21,6 +21,7 @@ interface Planet {
   speed: number;
   tilt: number;
   item: GalaxyItem;
+  born: number; // performance.now() when it first appeared, 0 once grown in
 }
 
 interface System {
@@ -30,6 +31,7 @@ interface System {
   corona: THREE.Sprite;
   planets: Planet[];
   spin: number;
+  born: number;
 }
 
 export interface GalaxySceneCallbacks {
@@ -64,6 +66,8 @@ export class GalaxyScene {
   private background = new GalaxyBackground();
   private disc!: THREE.Points;
   private systems: System[] = [];
+  private knownOwners = new Set<string>(); // for grow-in of newly-appeared systems
+  private knownItems = new Set<string>(); // …and newly-appeared planets
   private glowTex = radialTexture(0.95, 0.4);
   private softTex = radialTexture(0.6, 0.25);
   private container: HTMLElement | null = null;
@@ -215,6 +219,7 @@ export class GalaxyScene {
       owners.get(it.ownerId)!.push(it);
     }
     const n = owners.size;
+    const now = performance.now();
     let idx = 0;
     for (const [ownerId, ownerItems] of owners) {
       const group = new THREE.Group();
@@ -223,6 +228,9 @@ export class GalaxyScene {
       const rad = n === 1 ? 0 : 10 + Math.sqrt(idx) * 9;
       group.position.set(Math.cos(ang) * rad, 1.5 + Math.sin(idx * 1.3) * 4, Math.sin(ang) * rad);
       const col = userColor(ownerId);
+      // new system → grow in from nothing
+      const sysBorn = this.knownOwners.has(ownerId) ? 0 : now;
+      if (sysBorn) group.scale.setScalar(0.01);
 
       // star: bright core sprite + soft corona + light
       const star = new THREE.Sprite(
@@ -277,13 +285,19 @@ export class GalaxyScene {
         holder.add(planet);
         group.add(holder);
 
-        planets.push({ mesh: planet, rim, dust, orbit, angle, speed: 0.12 + (i % 4) * 0.05, tilt, item });
+        const planetBorn = this.knownItems.has(item.id) ? 0 : now;
+        if (planetBorn) planet.scale.setScalar(0.01);
+        planets.push({ mesh: planet, rim, dust, orbit, angle, speed: 0.12 + (i % 4) * 0.05, tilt, item, born: planetBorn });
       });
 
       this.world.add(group);
-      this.systems.push({ ownerId, group, star, corona, planets, spin: 0.03 + (idx % 5) * 0.01 });
+      this.systems.push({ ownerId, group, star, corona, planets, spin: 0.03 + (idx % 5) * 0.01, born: sysBorn });
       idx++;
     }
+    // remember what exists now so the next update only grows in truly-new things
+    this.knownOwners = new Set(owners.keys());
+    this.knownItems = new Set(items.map((i) => i.id));
+    // the galaxy frames itself as it grows
     this.targetDist = Math.max(20, 16 + Math.sqrt(n) * 8);
   }
 
@@ -417,18 +431,32 @@ export class GalaxyScene {
     this.camera.lookAt(0, 0, 0);
 
     this.disc.rotation.y += dt * 0.012;
+    const nowMs = performance.now();
+    const easeOut = (x: number) => 1 - Math.pow(1 - x, 3);
     for (const s of this.systems) {
       s.group.rotation.y += s.spin * dt;
       s.star.material.opacity = 0.85 + Math.sin(t * 2 + s.group.position.x) * 0.12;
       const coronaScale = 9 + Math.sin(t * 1.5 + s.group.position.z) * 0.5;
       s.corona.scale.set(coronaScale, coronaScale, 1);
+      // grow a newly-appeared system in over ~700ms
+      if (s.born) {
+        const g = Math.min(1, (nowMs - s.born) / 700);
+        s.group.scale.setScalar(easeOut(g));
+        if (g >= 1) s.born = 0;
+      }
       for (const p of s.planets) {
         p.angle += p.speed * dt;
         // planet rides within its tilted orbital-plane holder
         p.mesh.position.set(Math.cos(p.angle) * p.orbit, 0, Math.sin(p.angle) * p.orbit);
         p.dust.rotation.y += dt * 0.6;
         const hot = this.hovered === p;
-        const target = hot ? 1.5 : 1;
+        let grow = 1;
+        if (p.born) {
+          const g = Math.min(1, (nowMs - p.born) / 600);
+          grow = easeOut(g);
+          if (g >= 1) p.born = 0;
+        }
+        const target = (hot ? 1.5 : 1) * grow;
         p.mesh.scale.lerp(new THREE.Vector3(target, target, target), 0.2);
         (p.rim.material as THREE.SpriteMaterial).opacity = 0.5 + (hot ? 0.4 : 0) + Math.sin(t * 3 + p.angle) * 0.1;
       }
