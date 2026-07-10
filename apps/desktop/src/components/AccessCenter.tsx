@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { galaxyConfigured } from "../lib/supabase";
+import { useClickOutside } from "../lib/useClickOutside";
+import { Modal } from "./Modal";
 import { useSession } from "../stores/session";
 import { useSettings } from "../lib/settings";
 import { useUi } from "../stores/ui";
@@ -30,17 +32,22 @@ export function AccessCenter() {
   const showToast = useUi((s) => s.showToast);
   const [open, setOpen] = useState(false);
   const [review, setReview] = useState<Proposal | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useClickOutside(rootRef, () => setOpen(false), open);
 
   useEffect(() => {
-    if (open && unread > 0) void markNotificationsRead();
-  }, [open, unread]);
+    if (open && notificationsOn && unread > 0) void markNotificationsRead();
+  }, [open, notificationsOn, unread]);
 
-  if (!galaxyConfigured || !session || !notificationsOn) return null;
+  // the bell must always render when signed in: it's the only UI for granting
+  // requests and approving proposals — the notifications toggle only mutes
+  // the activity feed and its unread badge
+  if (!galaxyConfigured || !session) return null;
   const pending = incoming.length + proposals.length;
-  const badge = unread + pending;
+  const badge = pending + (notificationsOn ? unread : 0);
 
   return (
-    <div className="relative">
+    <div className="relative" ref={rootRef}>
       <button
         className="relative rounded-full border border-border bg-black/30 px-2.5 py-1 text-[13px] text-muted transition hover:border-brand hover:text-text"
         onClick={() => setOpen((o) => !o)}
@@ -138,22 +145,31 @@ export function AccessCenter() {
             </section>
           )}
 
-          <div className="hud-label mb-1">Activity</div>
-          {notifications.length === 0 ? (
-            <p className="text-[11px] text-muted">Nothing yet.</p>
+          {notificationsOn ? (
+            <>
+              <div className="hud-label mb-1">Activity</div>
+              {notifications.length === 0 ? (
+                <p className="text-[11px] text-muted">Nothing yet.</p>
+              ) : (
+                notifications.slice(0, 20).map((n: AppNotification) => (
+                  <div key={n.id} className="mb-1 text-[11px] text-muted">
+                    {(NOTE_TEXT[n.type] ?? (() => n.type))(n.payload)}
+                  </div>
+                ))
+              )}
+            </>
           ) : (
-            notifications.slice(0, 20).map((n: AppNotification) => (
-              <div key={n.id} className="mb-1 text-[11px] text-muted">
-                {(NOTE_TEXT[n.type] ?? (() => n.type))(n.payload)}
-              </div>
-            ))
+            pending === 0 && <p className="text-[11px] text-muted">Notifications are off — requests still appear here.</p>
           )}
         </div>
       )}
 
       {review && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
-          <div className="hud-panel flex h-full max-h-[560px] w-full max-w-2xl flex-col p-5">
+        <Modal
+          onClose={() => setReview(null)}
+          label={`Review proposal for ${review.itemName ?? "item"}`}
+          panelClassName="hud-panel flex h-full max-h-[560px] w-full max-w-2xl flex-col p-5"
+        >
             <div className="mb-2 flex items-center justify-between">
               <span className="hud-label">
                 Proposed by @{review.proposerHandle} · {review.itemName}
@@ -186,8 +202,7 @@ export function AccessCenter() {
                 Approve — replace my {review.itemName}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

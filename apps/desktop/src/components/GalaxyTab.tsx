@@ -13,6 +13,7 @@ import { requestChanges, useAccess } from "../lib/access";
 import { proposeChange } from "../lib/proposals";
 import { fmtCountdown, useCountdown } from "../lib/useCountdown";
 import { confirm } from "../stores/confirm";
+import { Modal } from "./Modal";
 
 const Editor = lazy(() => import("./Editor").then((m) => ({ default: m.Editor })));
 
@@ -88,7 +89,10 @@ function GalaxyLive() {
   const [draft, setDraft] = useState("");
   const uid = useSession((s) => s.session?.user.id);
   const myGrant = useAccess((s) => (selected ? s.grants.get(selected.id) : undefined));
-  const canEdit = !!selected && !!myGrant && myGrant.granteeId === uid;
+  // the countdown gate matters: grant expiry is passive, so without it the
+  // Edit button would linger after the 30-minute window lapsed
+  const grantMs = useCountdown(myGrant?.expiresAt);
+  const canEdit = !!selected && !!myGrant && myGrant.granteeId === uid && grantMs > 0;
   const items = useGalaxy((s) => s.items);
   const loading = useGalaxy((s) => s.loading);
   const galaxyError = useGalaxy((s) => s.error);
@@ -126,20 +130,39 @@ function GalaxyLive() {
     sceneRef.current = scene;
     scene.setItems(useGalaxy.getState().items);
     scene.setFreeNavigation(useUi.getState().freeNav);
+    // Enter on the same query cycles matches; description counts like Personal
+    let lastQ = "";
+    let matchIdx = 0;
     galaxySearchRef.current = (q) => {
-      const hit = useGalaxy
+      const matches = useGalaxy
         .getState()
-        .items.find((i) => i.name.toLowerCase().includes(q) || i.ownerHandle.toLowerCase().includes(q));
-      if (hit) {
-        scene.focusItemById(hit.id);
-        setSelected(hit);
-      } else useUi.getState().showToast(`Nothing in the galaxy matches "${q}"`);
+        .items.filter(
+          (i) =>
+            i.name.toLowerCase().includes(q) ||
+            i.description.toLowerCase().includes(q) ||
+            i.ownerHandle.toLowerCase().includes(q),
+        );
+      if (matches.length === 0) {
+        useUi.getState().showToast(`Nothing in the galaxy matches "${q}"`);
+        return;
+      }
+      matchIdx = lastQ === q ? (matchIdx + 1) % matches.length : 0;
+      lastQ = q;
+      const hit = matches[matchIdx]!;
+      scene.focusItemById(hit.id);
+      setSelected(hit);
+      if (matches.length > 1) useUi.getState().showToast(`${matchIdx + 1}/${matches.length} — Enter for next`);
     };
     void fetchGalaxy();
     subscribeGalaxy();
     joinGalaxyPresence();
     const unsubItems = useGalaxy.subscribe((s, prev) => {
-      if (s.items !== prev.items) scene.setItems(s.items);
+      if (s.items !== prev.items) {
+        scene.setItems(s.items);
+        // keep the side panel honest: refresh the selected item from the new
+        // data, and close it if the item was unshared/moderated away
+        setSelected((sel) => (sel ? (s.items.find((i) => i.id === sel.id) ?? null) : sel));
+      }
     });
     const unsubPresence = usePresence.subscribe((s, prev) => {
       if (s.onlineCount !== prev.onlineCount) scene.setActivity(s.onlineCount);
@@ -163,7 +186,8 @@ function GalaxyLive() {
   useEffect(() => {
     setContent(null);
     if (selected) void fetchItemContent(selected).then(setContent);
-  }, [selected?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    // re-fetch when a realtime update moves the item's current version
+  }, [selected?.id, selected?.currentVersionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="relative h-full">
@@ -278,42 +302,96 @@ function GalaxyLive() {
       )}
 
       {editing && selected && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm">
-          <div className="flex h-full w-full max-w-3xl flex-col rounded-2xl border border-border bg-[#0b0f22] p-4 shadow-2xl">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-sm font-semibold">
-                Proposing changes to <span className="font-mono text-brand2">{selected.name}</span>
-                <span className="ml-2 text-[11px] text-amber-300">the owner must approve before it goes live</span>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  className="btn-primary"
-                  disabled={!draft.trim() || draft === content}
-                  onClick={async () => {
-                    const r = await proposeChange(selected.id, draft);
-                    if (r === "ok") {
-                      showToast("📨 Change proposed — awaiting the owner's approval");
-                      setEditing(false);
-                    } else if (r === "empty") showToast("A skill can't be made empty");
-                    else showToast("Couldn't propose — is your window still open?");
-                  }}
-                >
-                  📨 Submit proposal
-                </button>
-                <button className="btn" onClick={() => setEditing(false)}>
-                  Cancel
-                </button>
-              </div>
-            </div>
-            <div className="min-h-0 flex-1">
-              <Suspense fallback={<div className="p-4 text-xs text-muted">Loading editor…</div>}>
-                <Editor initial={content ?? ""} onChange={setDraft} />
-              </Suspense>
-            </div>
-          </div>
-        </div>
+        <ProposeModal
+          item={selected}
+          content={content}
+          draft={draft}
+          setDraft={setDraft}
+          onClose={() => setEditing(false)}
+        />
       )}
     </div>
+  );
+}
+
+/** Propose-changes editor. Cancel/Escape confirms before discarding a dirty
+ * draft; Ctrl+Enter submits (same gate as the button). */
+function ProposeModal({
+  item,
+  content,
+  draft,
+  setDraft,
+  onClose,
+}: {
+  item: GalaxyItem;
+  content: string | null;
+  draft: string;
+  setDraft: (v: string) => void;
+  onClose: () => void;
+}) {
+  const showToast = useUi((s) => s.showToast);
+  const canSubmit = !!draft.trim() && draft !== content;
+
+  const submit = async () => {
+    if (!canSubmit) return;
+    const r = await proposeChange(item.id, draft);
+    if (r === "ok") {
+      showToast("📨 Change proposed — awaiting the owner's approval");
+      onClose();
+    } else if (r === "empty") showToast("A skill can't be made empty");
+    else showToast("Couldn't propose — is your window still open?");
+  };
+
+  const cancel = async () => {
+    if (draft !== (content ?? "")) {
+      const ok = await confirm({
+        title: "Discard proposed changes?",
+        message: "Your draft hasn't been submitted to the owner.",
+        confirmLabel: "Discard",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    onClose();
+  };
+
+  return (
+    <Modal
+      onClose={() => void cancel()}
+      label={`Propose changes to ${item.name}`}
+      backdropClassName="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
+      panelClassName="flex h-full w-full max-w-3xl flex-col rounded-2xl border border-border bg-[#0b0f22] p-4 shadow-2xl"
+    >
+      <div
+        className="flex min-h-0 flex-1 flex-col"
+        onKeyDown={(e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+            e.preventDefault();
+            void submit();
+          }
+        }}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <div className="text-sm font-semibold">
+            Proposing changes to <span className="font-mono text-brand2">{item.name}</span>
+            <span className="ml-2 text-[11px] text-amber-300">the owner must approve before it goes live</span>
+          </div>
+          <div className="flex gap-2">
+            <button className="btn-primary" disabled={!canSubmit} onClick={() => void submit()} title="Ctrl+Enter">
+              📨 Submit proposal
+            </button>
+            <button className="btn" onClick={() => void cancel()}>
+              Cancel
+            </button>
+          </div>
+        </div>
+        <div className="min-h-0 flex-1">
+          <Suspense fallback={<div className="p-4 text-xs text-muted">Loading editor…</div>}>
+            <Editor initial={content ?? ""} onChange={setDraft} />
+          </Suspense>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

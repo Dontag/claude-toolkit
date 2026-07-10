@@ -6,6 +6,7 @@ import { useUi } from "../stores/ui";
 import { useSession } from "../stores/session";
 import { useInventory } from "../stores/inventory";
 import { sourceState } from "../sources/bootstrap";
+import { Modal } from "./Modal";
 
 function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
@@ -40,8 +41,11 @@ export function ConfigPanel({ onClose }: { onClose: () => void }) {
   );
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
-      <div className="hud-panel w-full max-w-md p-5">
+    <Modal
+      onClose={onClose}
+      label="Configuration"
+      panelClassName="hud-panel max-h-[calc(100vh-4rem)] w-full max-w-md overflow-y-auto p-5"
+    >
         <div className="mb-2 flex items-center justify-between">
           <span className="hud-label">⚙ Configuration</span>
           <button className="btn-ghost" onClick={onClose}>
@@ -49,7 +53,7 @@ export function ConfigPanel({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <Row label="🔔 Notifications" hint="Grant, request & proposal alerts in-app">
+        <Row label="🔔 Notifications" hint="Activity feed & unread badge — requests and approvals always show">
           <Toggle on={s.notifications} onChange={s.setNotifications} />
         </Row>
         <Row label="✉️ Email notifications" hint={galaxyConfigured ? "Needs the notify-email edge function + provider" : "Sign-in backend not configured"}>
@@ -79,8 +83,7 @@ export function ConfigPanel({ onClose }: { onClose: () => void }) {
             🐞 Report an issue
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

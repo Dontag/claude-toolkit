@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { galaxyConfigured } from "../lib/supabase";
 import { useSession } from "../stores/session";
 import { confirm } from "../stores/confirm";
+import { useClickOutside } from "../lib/useClickOutside";
 
 export function AuthMenu() {
   const session = useSession((s) => s.session);
@@ -13,6 +14,14 @@ export function AuthMenu() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+  useClickOutside(rootRef, () => setOpen(false), open);
+
+  const submit = async () => {
+    if (busy || !email || !password) return;
+    const fn = mode === "signin" ? useSession.getState().signInWithEmail : useSession.getState().signUpWithEmail;
+    if (await fn(email, password)) setOpen(false);
+  };
 
   if (!galaxyConfigured) return null;
 
@@ -47,7 +56,7 @@ export function AuthMenu() {
   }
 
   return (
-    <div className="relative">
+    <div className="relative" ref={rootRef}>
       <button className="btn" onClick={() => setOpen((o) => !o)}>
         {busy ? "Signing in…" : "Sign in"}
       </button>
@@ -76,19 +85,12 @@ export function AuthMenu() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void submit();
+            }}
           />
           <div className="flex gap-2">
-            <button
-              className="btn flex-1"
-              disabled={busy || !email || !password}
-              onClick={async () => {
-                const fn =
-                  mode === "signin"
-                    ? useSession.getState().signInWithEmail
-                    : useSession.getState().signUpWithEmail;
-                if (await fn(email, password)) setOpen(false);
-              }}
-            >
+            <button className="btn flex-1" disabled={busy || !email || !password} onClick={() => void submit()}>
               {mode === "signin" ? "Sign in" : "Create account"}
             </button>
             <button

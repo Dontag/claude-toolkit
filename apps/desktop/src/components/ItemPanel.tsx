@@ -13,6 +13,7 @@ import { pushVersion, setSync, shareItem, unshareItem, usePublish } from "../lib
 import { confirm } from "../stores/confirm";
 import { useAccess } from "../lib/access";
 import { fmtCountdown, useCountdown } from "../lib/useCountdown";
+import { Modal } from "./Modal";
 
 const KIND_COLOR: Record<string, string> = {
   skill: "#ff6b7a",
@@ -168,16 +169,21 @@ export function ItemPanel() {
 
       {/* editor modal */}
       {editorOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
-          onKeyDown={(e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
-              e.preventDefault();
-              void save();
-            }
-          }}
+        <Modal
+          onClose={() => void cancelEdit()}
+          label={`Edit ${item.name}`}
+          backdropClassName="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
+          panelClassName="flex h-full w-full max-w-3xl flex-col rounded-2xl border border-border bg-[#0b0f22] p-4 shadow-2xl"
         >
-          <div className="flex h-full w-full max-w-3xl flex-col rounded-2xl border border-border bg-[#0b0f22] p-4 shadow-2xl">
+          <div
+            className="flex min-h-0 flex-1 flex-col"
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+                e.preventDefault();
+                void save();
+              }
+            }}
+          >
             <div className="mb-3 flex items-center justify-between">
               <div className="text-sm font-semibold">
                 Editing <span className="font-mono text-brand2">{item.path}</span>
@@ -198,7 +204,7 @@ export function ItemPanel() {
               </Suspense>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   );

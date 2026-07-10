@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "../stores/session";
 import { useUi } from "../stores/ui";
+import { Modal } from "./Modal";
 import {
   adminRevokeGrant,
   loadAdminData,
@@ -33,8 +34,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
-      <div className="hud-panel flex h-full w-full max-w-4xl flex-col p-4">
+    <Modal onClose={onClose} label="Admin console" panelClassName="hud-panel flex h-full w-full max-w-4xl flex-col p-4">
         <div className="mb-3 flex items-center justify-between">
           <span className="hud-label" style={{ color: "#ff6b7a" }}>
             ⚙ Admin console
@@ -137,8 +137,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

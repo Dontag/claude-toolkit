@@ -5,6 +5,8 @@ import type { ItemKind } from "@claude-toolkit/core";
 import { sourceState } from "../sources/bootstrap";
 import { useUi } from "../stores/ui";
 import { confirm } from "../stores/confirm";
+import { inferHookExt } from "../lib/hook-ext";
+import { Modal } from "./Modal";
 
 const KINDS: Array<{ k: ItemKind; label: string; emoji: string }> = [
   { k: "skill", label: "Skill", emoji: "🎯" },
@@ -24,15 +26,20 @@ export function AddItemDialog({ onClose }: { onClose: () => void }) {
   const [desc, setDesc] = useState("");
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pickedExt, setPickedExt] = useState<string | undefined>();
 
   const pickFile = async () => {
     try {
-      const path = await open({ multiple: false, filters: [{ name: "Toolkit file", extensions: ["md", "txt", "py", "sh", "js"] }] });
+      const path = await open({
+        multiple: false,
+        filters: [{ name: "Toolkit file", extensions: ["md", "txt", "py", "sh", "js", "mjs", "ps1"] }],
+      });
       if (typeof path !== "string") return;
       const text = await readTextFile(path);
       setBody(text);
+      setPickedExt(/\.(\w+)$/.exec(path)?.[1]?.toLowerCase());
       if (!name) {
-        const base = path.split(/[\\/]/).pop()?.replace(/\.(md|txt|py|sh|js)$/i, "") ?? "";
+        const base = path.split(/[\\/]/).pop()?.replace(/\.(md|txt|py|sh|js|mjs|ps1)$/i, "") ?? "";
         setName(base === "SKILL" ? path.split(/[\\/]/).slice(-2, -1)[0] ?? "" : base);
       }
       showToast("File loaded — review and save");
@@ -47,7 +54,9 @@ export function AddItemDialog({ onClose }: { onClose: () => void }) {
     const slug = slugify(name);
     if (!slug) return showToast("Give it a name first");
     if (!body.trim()) return showToast("Content can't be empty");
-    if (await local.itemExists(kind, slug)) {
+    // hooks keep their script language (picked file ext, or shebang sniff)
+    const hookExt = kind === "hook" ? inferHookExt(body, pickedExt) : undefined;
+    if (await local.itemExists(kind, slug, hookExt)) {
       const ok = await confirm({
         title: `A ${kind} named "${slug}" already exists`,
         message: "Saving will overwrite it. Continue?",
@@ -58,7 +67,7 @@ export function AddItemDialog({ onClose }: { onClose: () => void }) {
     }
     setBusy(true);
     try {
-      await local.createItem(kind, slug, body, desc);
+      await local.createItem(kind, slug, body, desc, hookExt);
       showToast(`🌱 ${slug} planted on your tree`);
       onClose();
     } catch {
@@ -69,8 +78,11 @@ export function AddItemDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
-      <div className="hud-panel flex h-full max-h-[560px] w-full max-w-2xl flex-col p-5">
+    <Modal
+      onClose={onClose}
+      label="Add to your tree"
+      panelClassName="hud-panel flex h-full max-h-[560px] w-full max-w-2xl flex-col p-5"
+    >
         <div className="mb-3 flex items-center justify-between">
           <span className="hud-label" style={{ color: "#5fae7d" }}>
             ✚ Add to your tree
@@ -120,7 +132,10 @@ export function AddItemDialog({ onClose }: { onClose: () => void }) {
           onChange={(e) => setBody(e.target.value)}
         />
         <div className="mt-1 text-[10px] text-muted">
-          Saves to <span className="font-mono">{sourceState.local ? LocalPathHint(kind, name) : "~/.claude"}</span>
+          Saves to{" "}
+          <span className="font-mono">
+            {sourceState.local ? LocalPathHint(kind, name, kind === "hook" ? inferHookExt(body, pickedExt) : "py") : "~/.claude"}
+          </span>
         </div>
 
         <div className="mt-3 flex justify-end gap-2">
@@ -131,12 +146,11 @@ export function AddItemDialog({ onClose }: { onClose: () => void }) {
             {busy ? "Saving…" : "🌱 Save to tree"}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
-function LocalPathHint(kind: ItemKind, name: string): string {
+function LocalPathHint(kind: ItemKind, name: string, hookExt: string): string {
   const slug = slugify(name) || "<name>";
   switch (kind) {
     case "skill":
@@ -146,6 +160,6 @@ function LocalPathHint(kind: ItemKind, name: string): string {
     case "command":
       return `.claude/commands/${slug}.md`;
     case "hook":
-      return `.claude/hooks/${slug}.py`;
+      return `.claude/hooks/${slug}.${hookExt}`;
   }
 }

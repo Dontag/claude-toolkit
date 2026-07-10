@@ -34,6 +34,8 @@ import { useSession } from "./stores/session";
 import { hydrateSharedState } from "./lib/publish";
 import { joinGalaxyPresence, leaveGalaxyPresence, usePresence, userColor } from "./lib/presence";
 import { galaxyConfigured } from "./lib/supabase";
+import { isTextEntry } from "./lib/hotkeys";
+import { closeTopModal, modalOpen } from "./stores/modals";
 
 export default function App() {
   const tab = useUi((s) => s.tab);
@@ -135,16 +137,24 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === "INPUT") {
-        if (e.key === "Escape") (e.target as HTMLElement).blur();
+      if (e.key === "Escape") {
+        // open dialogs win: close the top one and stop — never reset the
+        // camera or drop the selection "through" a dialog (that used to
+        // unmount the editor and silently discard unsaved drafts)
+        if (closeTopModal()) return;
+        if (isTextEntry(e.target)) {
+          (e.target as HTMLElement).blur();
+          return;
+        }
+        useUi.getState().select(null);
+        sceneRef.current?.resetView();
         return;
       }
+      // typing surfaces (inputs, CodeMirror) and open dialogs own their keys
+      if (isTextEntry(e.target) || modalOpen()) return;
       if (e.key === "/") {
         e.preventDefault();
         searchRef.current?.focus();
-      } else if (e.key === "Escape") {
-        useUi.getState().select(null);
-        sceneRef.current?.resetView();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
         // rate-limited refresh via keyboard; the button owns the cooldown
         e.preventDefault();
@@ -154,8 +164,9 @@ export default function App() {
           useUi.getState().showToast("You're offline — reconnect to refresh");
         } else {
           useConnection.setState({ lastRefresh: Date.now() });
-          void (useUi.getState().tab === "galaxy" ? fetchGalaxy() : rescanLocal());
-          useUi.getState().showToast("Refreshed");
+          void (useUi.getState().tab === "galaxy" ? fetchGalaxy() : rescanLocal()).then((ok) =>
+            useUi.getState().showToast(ok ? "Refreshed" : "Refresh failed — try again"),
+          );
         }
       }
     };
@@ -163,6 +174,8 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // pressing Enter again on the same query cycles through the matches
+  const cycleRef = useRef({ query: "", index: 0 });
   const search = (q: string) => {
     const query = q.trim().toLowerCase();
     if (!query) return;
@@ -170,11 +183,18 @@ export default function App() {
       galaxySearchRef.current?.(query);
       return;
     }
-    const hit = [...useInventory.getState().items.values()].find(
+    const matches = [...useInventory.getState().items.values()].filter(
       (i) => i.name.toLowerCase().includes(query) || i.description.toLowerCase().includes(query),
     );
-    if (hit) sceneRef.current?.focusItem(hit.id);
-    else useUi.getState().showToast(`No item matching "${q}"`);
+    if (matches.length === 0) {
+      useUi.getState().showToast(`No item matching "${q}"`);
+      return;
+    }
+    const c = cycleRef.current;
+    c.index = c.query === query ? (c.index + 1) % matches.length : 0;
+    c.query = query;
+    sceneRef.current?.focusItem(matches[c.index]!.id);
+    if (matches.length > 1) useUi.getState().showToast(`${c.index + 1}/${matches.length} — Enter for next`);
   };
 
   return (
