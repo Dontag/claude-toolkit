@@ -1023,7 +1023,8 @@ export class GalaxyScene {
       this.targetDist = Math.min(this.maxDist, Math.max(5, this.targetDist + e.deltaY * 0.04));
     };
     const onClick = (e: MouseEvent) => {
-      if (Math.abs(e.clientX - this.downX) > 4 || Math.abs(e.clientY - this.downY) > 4) return;
+      // fingers jitter more than a mouse — allow a looser tap tolerance
+      if (Math.abs(e.clientX - this.downX) > 10 || Math.abs(e.clientY - this.downY) > 10) return;
       this.ray.setFromCamera(this.mouse, this.camera);
       const hits = this.ray.intersectObjects(this.systems.flatMap((s) => s.planets.map((p) => p.hit)), false);
       this.cb.onItemSelected?.(hits.length ? (hits[0]!.object.userData.item as GalaxyItem) : null);

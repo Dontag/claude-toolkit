@@ -198,7 +198,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-transparent text-text">
+    <div className="flex h-dvh flex-col overflow-hidden bg-transparent text-text">
       {/* flex-wrap (not overflow scroll): on narrow phones the controls wrap
           to a second row so every one stays reachable — and, crucially, the
           header never becomes a clipping container, which would cut off the
@@ -216,7 +216,7 @@ export default function App() {
         <input
           ref={searchRef}
           placeholder={tab === "galaxy" ? "Search the galaxy…  ( / )" : "Search fruits…  ( / )"}
-          className="ml-auto min-w-0 flex-1 rounded-lg border border-border bg-black/30 px-3 py-1.5 text-xs outline-none transition focus:border-brand sm:flex-none sm:w-40 md:w-56"
+          className="ml-auto min-w-0 flex-1 rounded-lg border border-border bg-black/30 px-3 py-1.5 text-base outline-none transition focus:border-brand sm:w-40 sm:flex-none sm:text-xs md:w-56"
           onKeyDown={(e) => {
             if (e.key === "Enter") search(e.currentTarget.value);
           }}

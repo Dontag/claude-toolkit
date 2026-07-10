@@ -7,7 +7,6 @@ import { joinGalaxyPresence, usePresence, userColor } from "../lib/presence";
 import { GalaxyScene } from "../scene/galaxy-scene";
 import { useSession } from "../stores/session";
 import { useUi } from "../stores/ui";
-import { RefreshButton } from "./RefreshButton";
 import { HudFrame } from "./HudFrame";
 import { requestChanges, useAccess } from "../lib/access";
 import { proposeChange } from "../lib/proposals";
@@ -128,17 +127,24 @@ function GalaxyLive() {
     // Enter on the same query cycles matches; description counts like Personal
     let lastQ = "";
     let matchIdx = 0;
-    galaxySearchRef.current = (q) => {
-      const matches = useGalaxy
-        .getState()
-        .items.filter(
-          (i) =>
-            i.name.toLowerCase().includes(q) ||
-            i.description.toLowerCase().includes(q) ||
-            i.ownerHandle.toLowerCase().includes(q),
-        );
+    galaxySearchRef.current = (raw) => {
+      const items = useGalaxy.getState().items;
+      const q = raw.replace(/^@/, ""); // "@dontag" and "dontag" both work
+      // Searching a creator → just fly to their solar system, no item dialogue.
+      // Exact handle wins; otherwise the unique creator whose handle contains q.
+      const byOwner = items.filter((i) => i.ownerHandle.toLowerCase() === q);
+      const partialOwners = [...new Set(items.filter((i) => i.ownerHandle.toLowerCase().includes(q)).map((i) => i.ownerHandle))];
+      const owner = byOwner[0] ?? (partialOwners.length === 1 ? items.find((i) => i.ownerHandle.toLowerCase() === partialOwners[0]!.toLowerCase()) : null);
+      if (owner) {
+        scene.focusItemById(owner.id);
+        setSelected(null);
+        useUi.getState().showToast(`⭐ Flying to @${owner.ownerHandle}'s system`);
+        return;
+      }
+      // Otherwise match items by name/description and cycle through them.
+      const matches = items.filter((i) => i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
       if (matches.length === 0) {
-        useUi.getState().showToast(`Nothing in the galaxy matches "${q}"`);
+        useUi.getState().showToast(`Nothing in the galaxy matches "${raw}"`);
         return;
       }
       matchIdx = lastQ === q ? (matchIdx + 1) % matches.length : 0;
@@ -146,7 +152,7 @@ function GalaxyLive() {
       const hit = matches[matchIdx]!;
       scene.focusItemById(hit.id);
       setSelected(hit);
-      if (matches.length > 1) useUi.getState().showToast(`${matchIdx + 1}/${matches.length} — Enter for next`);
+      if (matches.length > 1) useUi.getState().showToast(`${matchIdx + 1} of ${matches.length} — press Enter for the next`);
     };
     void fetchGalaxy();
     subscribeGalaxy();
@@ -204,6 +210,7 @@ function GalaxyLive() {
         className="pointer-events-none fixed z-[6] hud-label whitespace-nowrap text-[11px] text-text"
         style={{ display: "none" }}
       />
+      {/* Rescan lives in the top header (both tabs) — not duplicated here */}
       <div className="absolute left-4 top-4 z-10 flex items-center gap-2">
         <div className="hud-panel pointer-events-none px-4 py-1.5">
           <span className="hud-label">Galactic survey</span>
@@ -212,7 +219,6 @@ function GalaxyLive() {
             {!session && " · sign in to share"}
           </div>
         </div>
-        <RefreshButton onRefresh={fetchGalaxy} label="Rescan" />
       </div>
 
       {galaxyError && !loading && (
@@ -230,7 +236,11 @@ function GalaxyLive() {
             <span className="hud-label" style={{ color: kindColorHex(selected.kind) }}>
               ◆ {selected.kind} signature
             </span>
-            <button className="btn-ghost" onClick={() => setSelected(null)}>
+            <button
+              className="-mr-1 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base text-muted transition hover:bg-white/10 hover:text-text"
+              onClick={() => setSelected(null)}
+              aria-label="Close"
+            >
               ✕
             </button>
           </div>

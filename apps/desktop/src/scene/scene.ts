@@ -686,7 +686,7 @@ export class SkillTreeScene {
       this.lastInteract = performance.now();
     };
     const onClick = (e: MouseEvent) => {
-      if (Math.abs(e.clientX - this.downX) > 4 || Math.abs(e.clientY - this.downY) > 4) return;
+      if (Math.abs(e.clientX - this.downX) > 10 || Math.abs(e.clientY - this.downY) > 10) return;
       const rect = el.getBoundingClientRect();
       this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;

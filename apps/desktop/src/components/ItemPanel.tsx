@@ -102,7 +102,11 @@ export function ItemPanel() {
           <span className="hud-label" style={{ color: kindColorHex(item.kind) }}>
             ◆ {item.kind}
           </span>
-          <button className="btn-ghost" onClick={() => useUi.getState().select(null)}>
+          <button
+            className="-mr-1 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base text-muted transition hover:bg-white/10 hover:text-text"
+            onClick={() => useUi.getState().select(null)}
+            aria-label="Close"
+          >
             ✕
           </button>
         </div>

@@ -5,14 +5,13 @@ interface Props {
 }
 const { title, description = "Claude Galaxy — a living 3D skill tree for your Claude Code setup." } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-const nav = [
-  { href: `${base}/`, label: "Home" },
-  { href: `${base}/download`, label: "Download" },
+const path = Astro.url.pathname;
+// same link set + order as the landing nav so the header is identical everywhere
+const links = [
   { href: `${base}/toolkit`, label: "Toolkit" },
   { href: `${base}/changelog`, label: "Changelog" },
-  { href: `${base}/dashboard/`, label: "Web demo ↗" },
 ];
-const path = Astro.url.pathname;
+const isActive = (href: string) => path === href || path === `${href}/`;
 ---
 <html lang="en">
 <head>
@@ -112,16 +111,24 @@ const path = Astro.url.pathname;
       animation:twinkle 6s ease-in-out infinite}
     @keyframes twinkle{0%,100%{opacity:.6}50%{opacity:.4}}
     @media (prefers-reduced-motion: reduce){header.site,.stars{animation:none}}
-    @media (max-width:640px){ header.site .wrap{padding:8px 10px 8px 16px} nav.main a{padding:5px 9px} }
+    @media (max-width:560px){
+      header.site .wrap{gap:6px;padding:7px 8px 7px 12px}
+      .logo img{width:22px;height:22px}
+      .logo{font-size:13.5px}
+      nav.main a{font-size:12px;padding:6px 9px}
+      nav.main a.nav-github{display:none}
+    }
   </style>
 </head>
 <body>
   <div class="stars"></div>
   <header class="site">
     <div class="wrap">
-      <a class="logo" href={`${base}/`}>🌳 Claude Galaxy</a>
+      <a class="logo" href={`${base}/`}><img src={`${base}/logo.svg`} alt="" />Claude&nbsp;Galaxy</a>
       <nav class="main">
-        {nav.map((n) => <a href={n.href} class={path === n.href || path === `${n.href}/` ? "active" : ""}>{n.label}</a>)}
+        {links.map((n) => <a href={n.href} class={isActive(n.href) ? "active" : ""}>{n.label}</a>)}
+        <a class="nav-github" href="https://github.com/Dontag/claude-toolkit" aria-label="GitHub">GitHub ↗</a>
+        <a href={`${base}/download`} class:list={["cta", { active: isActive(`${base}/download`) }]}>Download</a>
       </nav>
     </div>
   </header>

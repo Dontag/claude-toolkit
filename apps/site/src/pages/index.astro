@@ -159,9 +159,13 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
     .orbit .ring:nth-child(3) i{background:#ffb057;box-shadow:0 0 12px #ffb057}
     @keyframes orbit-spin{to{transform:rotate(360deg)}}
     @media (max-width:760px){
-      .statement .row,.statement.rev .row{grid-template-columns:1fr;gap:26px}
+      .statement .row,.statement.rev .row{grid-template-columns:1fr;gap:22px}
       .statement .txt,.statement.rev .txt{order:0}
-      .orbit{max-width:220px}
+      /* stagger the little systems L / R / L with varied size + tilt so they
+         don't read as two identical circles stacked in a line */
+      .statement .orbit{margin:0 auto 0 4%;max-width:190px;transform:rotate(-9deg)}
+      .statement.rev .orbit{margin:0 4% 0 auto;max-width:240px;transform:rotate(11deg)}
+      .statement:nth-of-type(2n) .orbit{max-width:210px}
     }
     /* founder */
     .founder{padding:16vh 0}
@@ -644,7 +648,9 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
       let s = seed;
       const rnd = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
       const [r, g, b] = tint;
-      const cx = S / 2, cy = S / 2, R = S * 0.34;
+      // R kept small enough that a tilted ring (up to ~1.65 R) still fits
+      // inside the texture — otherwise the ring clips at the sprite's edge
+      const cx = S / 2, cy = S / 2, R = S * 0.26;
       // sphere shading: lit upper-left → deep shadow lower-right
       const grad = x.createRadialGradient(cx - R * 0.45, cy - R * 0.5, R * 0.1, cx, cy, R);
       grad.addColorStop(0, `rgba(${Math.min(255, r + 90)},${Math.min(255, g + 90)},${Math.min(255, b + 90)},1)`);
@@ -667,19 +673,20 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
       if (ring) {
         x.strokeStyle = `rgba(${Math.min(255, r + 60)},${Math.min(255, g + 60)},${Math.min(255, b + 60)},.55)`;
         x.lineWidth = 5;
-        x.beginPath(); x.ellipse(cx, cy, R * 1.7, R * 0.5, -0.42, 0, 7); x.stroke();
+        x.beginPath(); x.ellipse(cx, cy, R * 1.42, R * 0.44, -0.42, 0, 7); x.stroke();
         x.strokeStyle = `rgba(255,255,255,.22)`;
         x.lineWidth = 2;
-        x.beginPath(); x.ellipse(cx, cy, R * 1.95, R * 0.58, -0.42, 0, 7); x.stroke();
+        x.beginPath(); x.ellipse(cx, cy, R * 1.62, R * 0.5, -0.42, 0, 7); x.stroke();
       }
       return new THREE.CanvasTexture(c);
     }
     const planets: Array<{ m: THREE.Sprite; depth: number; bob: number }> = [];
     const planetDefs: Array<[[number, number, number], boolean, number, [number, number, number], number]> = [
-      // [tint, ringed, size, position, seed]
-      [[122, 60, 240], false, 30, [-78, 14, -55], 5],
-      [[46, 197, 255], true, 46, [72, -46, -80], 9],
-      [[217, 75, 160], false, 20, [38, 64, -95], 13],
+      // [tint, ringed, size, position, seed] — sizes bumped ~1.3x to offset the
+      // smaller R above so on-screen planets stay the same size
+      [[122, 60, 240], false, 39, [-78, 14, -55], 5],
+      [[46, 197, 255], true, 62, [72, -46, -80], 9],
+      [[217, 75, 160], false, 26, [38, 64, -95], 13],
     ];
     for (const [tint, ring, size, [px, py, pz], seed] of planetDefs) {
       const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: planetTex(tint, ring, seed), transparent: true, depthWrite: false }));
