@@ -630,7 +630,8 @@ export class SkillTreeScene {
     let panning = false;
     const onDown = (e: PointerEvent) => {
       ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-      panning = this.freeNav && (e.button === 2 || e.shiftKey);
+      // Free flight: plain drag pans; Shift/right-drag rotates. Locked: orbit.
+      panning = this.freeNav && !(e.button === 2 || e.shiftKey);
       if (ptrs.size === 2) {
         const [a, b] = [...ptrs.values()];
         pinchDist = Math.hypot(a![0] - b![0], a![1] - b![1]);

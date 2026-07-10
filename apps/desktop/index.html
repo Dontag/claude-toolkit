@@ -3,10 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="./logo.svg" />
     <title>Claude Toolkit</title>
+    <style>
+      /* pre-React paint so there's never a white flash before the loading screen */
+      html,body{margin:0;background:#05030f}
+      #boot{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+        background:radial-gradient(120% 90% at 50% 40%,#141a33 0%,#0b0720 45%,#05030f 100%)}
+      #boot img{width:84px;height:84px;animation:bp 2.2s ease-in-out infinite}
+      @keyframes bp{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.06);opacity:1}}
+    </style>
   </head>
 
   <body>
+    <div id="boot"><img src="./logo.svg" alt="" /></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -40,8 +40,8 @@ export function ConfigPanel({ onClose }: { onClose: () => void }) {
   );
 
   return (
-    <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 p-8 backdrop-blur-sm" onClick={onClose}>
-      <div className="hud-panel w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
+      <div className="hud-panel w-full max-w-md p-5">
         <div className="mb-2 flex items-center justify-between">
           <span className="hud-label">⚙ Configuration</span>
           <button className="btn-ghost" onClick={onClose}>

@@ -16,6 +16,9 @@ import { confirm } from "../stores/confirm";
 
 const Editor = lazy(() => import("./Editor").then((m) => ({ default: m.Editor })));
 
+/** Imperative hook so the header search box can drive the Galaxy tab. */
+export const galaxySearchRef: { current: ((q: string) => void) | null } = { current: null };
+
 const KIND_COLOR: Record<string, string> = {
   skill: "#ff6b7a",
   agent: "#ffb057",
@@ -123,6 +126,15 @@ function GalaxyLive() {
     sceneRef.current = scene;
     scene.setItems(useGalaxy.getState().items);
     scene.setFreeNavigation(useUi.getState().freeNav);
+    galaxySearchRef.current = (q) => {
+      const hit = useGalaxy
+        .getState()
+        .items.find((i) => i.name.toLowerCase().includes(q) || i.ownerHandle.toLowerCase().includes(q));
+      if (hit) {
+        scene.focusItemById(hit.id);
+        setSelected(hit);
+      } else useUi.getState().showToast(`Nothing in the galaxy matches "${q}"`);
+    };
     void fetchGalaxy();
     subscribeGalaxy();
     joinGalaxyPresence();
@@ -142,6 +154,7 @@ function GalaxyLive() {
       unsubItems();
       unsubPresence();
       unsubNav();
+      galaxySearchRef.current = null;
       sceneRef.current = null;
       scene.dispose();
     };
@@ -265,7 +278,7 @@ function GalaxyLive() {
       )}
 
       {editing && selected && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 p-8 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm">
           <div className="flex h-full w-full max-w-3xl flex-col rounded-2xl border border-border bg-[#0b0f22] p-4 shadow-2xl">
             <div className="mb-3 flex items-center justify-between">
               <div className="text-sm font-semibold">

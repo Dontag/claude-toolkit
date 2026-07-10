@@ -152,8 +152,8 @@ export function AccessCenter() {
       )}
 
       {review && (
-        <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 p-8 backdrop-blur-sm" onClick={() => setReview(null)}>
-          <div className="hud-panel flex h-full max-h-[560px] w-full max-w-2xl flex-col p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
+          <div className="hud-panel flex h-full max-h-[560px] w-full max-w-2xl flex-col p-5">
             <div className="mb-2 flex items-center justify-between">
               <span className="hud-label">
                 Proposed by @{review.proposerHandle} · {review.itemName}

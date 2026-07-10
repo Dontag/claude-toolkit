@@ -129,6 +129,41 @@ pre,
   }
 }
 
+/* ── Launch loading screen ── */
+.load-ring {
+  animation: spin-cw 2.4s linear infinite;
+}
+.load-ring-2 {
+  animation: spin-ccw 3.2s linear infinite;
+}
+.load-ring-3 {
+  animation: spin-cw 4s linear infinite;
+}
+.load-pulse {
+  animation: load-pulse 2.2s ease-in-out infinite;
+}
+@keyframes spin-cw {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes spin-ccw {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+@keyframes load-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 18px rgba(143, 131, 255, 0.5));
+  }
+  50% {
+    transform: scale(1.06);
+    filter: drop-shadow(0 0 30px rgba(217, 75, 208, 0.6));
+  }
+}
+
 /* CSS starfield used by the Galaxy teaser tab */
 .stars-css {
   background-image:

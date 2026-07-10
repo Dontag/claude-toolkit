@@ -51,6 +51,8 @@ try {
       </ErrorBoundary>
     </React.StrictMode>,
   );
+  // React's LoadingScreen now owns the splash — drop the pre-paint boot logo
+  document.getElementById("boot")?.remove();
 } catch (err) {
   showError("mount error", err);
 }

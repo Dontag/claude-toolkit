@@ -51,6 +51,14 @@ jobs:
           '
       - name: Build site
         run: pnpm --filter @claude-toolkit/site build
+      - name: Build web app (Galaxy-only) and mount at /app
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          pnpm --filter @claude-toolkit/desktop build:web
+          mkdir -p apps/site/dist/app
+          cp -r apps/desktop/dist-web/. apps/site/dist/app/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: apps/site/dist

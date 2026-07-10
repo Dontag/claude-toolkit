@@ -19,11 +19,8 @@ export function ConfirmDialog() {
   if (!current) return null;
 
   return (
-    <div
-      className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      onClick={() => respond(false)}
-    >
-      <div className="hud-panel w-[360px] max-w-[90vw] p-5" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="hud-panel w-[360px] max-w-[90vw] p-5">
         <h3 className="text-[15px] font-semibold">{current.title}</h3>
         {current.message && <p className="mt-2 text-xs leading-relaxed text-muted">{current.message}</p>}
         <div className="mt-4 flex justify-end gap-2">

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Session } from "@supabase/supabase-js";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { supabase } from "../lib/supabase";
+import { IS_WEB } from "../lib/platform";
 
 export interface Profile {
   id: string;
@@ -41,6 +42,15 @@ export const useSession = create<SessionState>((set) => ({
   signInWithGitHub: async () => {
     if (!supabase) return;
     set({ authBusy: true, authError: null, authNotice: null });
+    if (IS_WEB) {
+      // web: normal browser redirect flow — the page navigates to GitHub and back
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "github",
+        options: { redirectTo: window.location.href.split("#")[0] },
+      });
+      if (error) set({ authBusy: false, authError: error.message });
+      return;
+    }
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "github",
       options: { skipBrowserRedirect: true, redirectTo: "claude-toolkit://auth-callback" },

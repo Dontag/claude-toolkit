@@ -169,7 +169,7 @@ export function ItemPanel() {
       {/* editor modal */}
       {editorOpen && (
         <div
-          className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 p-8 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
           onKeyDown={(e) => {
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
               e.preventDefault();

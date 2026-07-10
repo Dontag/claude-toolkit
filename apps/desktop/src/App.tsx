@@ -24,7 +24,12 @@ import { HudFrame } from "./components/HudFrame";
 import { rescanLocal } from "./sources/bootstrap";
 import { refreshRemaining, useConnection } from "./stores/connection";
 import { fetchGalaxy } from "./lib/galaxy";
+import { IS_WEB } from "./lib/platform";
 import { checkForUpdates } from "./updater";
+import LOGO from "./assets/logo.svg";
+import { galaxySearchRef } from "./components/GalaxyTab";
+import { FreeLockControl } from "./components/FreeLockControl";
+import { LoadingScreen } from "./components/LoadingScreen";
 import { useSession } from "./stores/session";
 import { hydrateSharedState } from "./lib/publish";
 import { joinGalaxyPresence, leaveGalaxyPresence, usePresence, userColor } from "./lib/presence";
@@ -34,15 +39,19 @@ export default function App() {
   const tab = useUi((s) => s.tab);
   const toast = useUi((s) => s.toast);
   const mode = useInventory((s) => s.mode);
-  const rootLabel = useInventory((s) => s.rootLabel);
   const count = useInventory((s) => s.items.size);
-  const freeNav = useUi((s) => s.freeNav);
   const onlineStatus = useConnection((s) => s.online);
   const searchRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
 
   useEffect(() => {
+    if (IS_WEB) {
+      // web mode: Galaxy only — no local FS, no updater, no deep links
+      useUi.getState().setTab("galaxy");
+      setReady(true);
+      return;
+    }
     bootstrapInventory().finally(() => setReady(true));
     void checkForUpdates();
     // deep links: item links fly to a fruit; auth-callback completes OAuth
@@ -157,6 +166,10 @@ export default function App() {
   const search = (q: string) => {
     const query = q.trim().toLowerCase();
     if (!query) return;
+    if (useUi.getState().tab === "galaxy") {
+      galaxySearchRef.current?.(query);
+      return;
+    }
     const hit = [...useInventory.getState().items.values()].find(
       (i) => i.name.toLowerCase().includes(query) || i.description.toLowerCase().includes(query),
     );
@@ -166,42 +179,31 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-transparent text-text">
-      <header className="z-30 flex h-12 shrink-0 items-center gap-3 border-b border-border bg-black/25 px-4 backdrop-blur-xl">
-        <span className="text-sm font-bold tracking-tight">🌳 Claude Toolkit</span>
-        <nav className="ml-2 flex gap-1">
-          <TabButton id="personal" label="🌱 Personal Space" />
+      <header className="z-30 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-black/30 px-3 backdrop-blur-xl">
+        {/* left: brand + tabs */}
+        <img src={LOGO} alt="" className="h-6 w-6 shrink-0" />
+        <span className="hidden text-sm font-bold tracking-tight sm:inline">Claude Toolkit</span>
+        <nav className="ml-1 flex gap-1">
+          {!IS_WEB && <TabButton id="personal" label="🌱 Personal" />}
           <TabButton id="galaxy" label="🌌 Galaxy" />
         </nav>
-        {tab === "personal" && (
-          <input
-            ref={searchRef}
-            placeholder="Search fruits…  ( / )"
-            className="ml-auto w-56 rounded-lg border border-border bg-black/30 px-3 py-1.5 text-xs outline-none transition focus:border-brand"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") search(e.currentTarget.value);
-            }}
-          />
-        )}
-        <div className={`flex items-center gap-2 ${tab === "personal" ? "" : "ml-auto"}`}>
-          <AdminButton />
-          <AccessCenter />
-          <ConfigButton />
-          <AuthMenu />
-        </div>
-        <button
-          className={`rounded-full border px-3 py-1 text-[11px] transition ${
-            freeNav ? "border-brand bg-brand/20 text-text" : "border-border bg-black/30 text-muted hover:border-brand hover:text-text"
-          }`}
-          title={freeNav ? "Free navigation — drag pans, right-drag/shift to pan. Click to re-center." : "Center-locked — click to navigate freely"}
-          onClick={() => useUi.getState().toggleFreeNav()}
-        >
-          {freeNav ? "🧭 Free" : "🔒 Locked"}
-        </button>
+
+        {/* center: search (both tabs) */}
+        <input
+          ref={searchRef}
+          placeholder={tab === "galaxy" ? "Search the galaxy…  ( / )" : "Search fruits…  ( / )"}
+          className="ml-auto w-40 rounded-lg border border-border bg-black/30 px-3 py-1.5 text-xs outline-none transition focus:border-brand md:w-56"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") search(e.currentTarget.value);
+          }}
+        />
+
+        {/* center-right: contextual actions */}
         {tab === "personal" && mode === "local" && (
           <>
             <button
               className="rounded-full border border-emerald-400/40 bg-black/30 px-3 py-1 text-[11px] text-emerald-300 transition hover:border-emerald-400"
-              title="Add a skill, agent, command or hook to your tree"
+              title="Add a skill, agent, command, hook or other Claude item to your tree"
               onClick={() => setAddOpen(true)}
             >
               ✚ Add
@@ -209,15 +211,25 @@ export default function App() {
             <RefreshButton onRefresh={rescanLocal} label="Rescan" />
           </>
         )}
-        <button
-          className="rounded-full border border-border bg-black/30 px-3 py-1 text-[11px] text-muted transition hover:border-brand hover:text-text"
-          title={mode === "local" ? "Open your .claude folder" : "Demo mode"}
-          onClick={() => {
-            if (sourceState.local) void revealItemInDir(sourceState.local.root).catch(() => {});
-          }}
-        >
-          {mode === "local" ? `📂 ${rootLabel}` : "🔒 demo data"} · {count} items
-        </button>
+        {tab === "galaxy" && <RefreshButton onRefresh={fetchGalaxy} label="Rescan" />}
+        {!IS_WEB && (
+          <button
+            className="hidden rounded-full border border-border bg-black/30 px-3 py-1 text-[11px] text-muted transition hover:border-brand hover:text-text lg:inline"
+            title={mode === "local" ? "Open your .claude folder" : "Demo mode"}
+            onClick={() => {
+              if (sourceState.local) void revealItemInDir(sourceState.local.root).catch(() => {});
+            }}
+          >
+            {mode === "local" ? `📂 ${count}` : "🔒 demo"}
+          </button>
+        )}
+
+        {/* far right: system + account */}
+        <span className="mx-1 h-5 w-px bg-border" />
+        <AdminButton />
+        <AccessCenter />
+        <ConfigButton />
+        <AuthMenu />
       </header>
 
       {!onlineStatus && (
@@ -246,9 +258,10 @@ export default function App() {
                 </button>
               </div>
             )}
-            <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-border bg-black/30 px-4 py-1.5 text-[11px] text-muted backdrop-blur">
-              Drag to rotate · Scroll to zoom · Click a fruit · <kbd>/</kbd> search · <kbd>Esc</kbd> resets · <kbd>Ctrl+R</kbd> rescan
+            <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 hidden -translate-x-1/2 rounded-full border border-border bg-black/30 px-4 py-1.5 text-[11px] text-muted backdrop-blur md:block">
+              Drag to rotate · Scroll to zoom · Click a fruit · <kbd>/</kbd> search · <kbd>Esc</kbd> resets
             </div>
+            <FreeLockControl />
           </>
         ) : (
           <Suspense
@@ -257,12 +270,14 @@ export default function App() {
             }
           >
             <GalaxyTab />
+            <FreeLockControl />
           </Suspense>
         )}
       </main>
 
       {addOpen && <AddItemDialog onClose={() => setAddOpen(false)} />}
       <ConfirmDialog />
+      <LoadingScreen done={ready} />
 
       {toast && (
         <div className="pointer-events-none absolute bottom-14 left-1/2 z-40 -translate-x-1/2 rounded-xl border border-border bg-[#141a33] px-4 py-2 text-sm shadow-2xl">

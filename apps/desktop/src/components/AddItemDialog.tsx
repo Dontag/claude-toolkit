@@ -69,8 +69,8 @@ export function AddItemDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 p-8 backdrop-blur-sm" onClick={onClose}>
-      <div className="hud-panel flex h-full max-h-[560px] w-full max-w-2xl flex-col p-5" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
+      <div className="hud-panel flex h-full max-h-[560px] w-full max-w-2xl flex-col p-5">
         <div className="mb-3 flex items-center justify-between">
           <span className="hud-label" style={{ color: "#5fae7d" }}>
             ✚ Add to your tree

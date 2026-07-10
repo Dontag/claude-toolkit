@@ -155,23 +155,37 @@ function planetTextures(kindColor: number, seed: number): { map: THREE.CanvasTex
 
 let seedCounter = 1;
 
-/** Accretion-disk texture: a bright hot ring fading in and out radially. */
+/** Accretion-disk texture: hot blue-white inner edge → orange, with angular
+ * streaks so the spinning disk reads as turbulent matter (radial layout: the
+ * ring maps radius→x, angle→y, so vertical streaks become swirls). */
 function accretionTexture(): THREE.CanvasTexture {
-  const S = 256;
+  const S = 512;
   const c = document.createElement("canvas");
   c.width = c.height = S;
   const x = c.getContext("2d")!;
-  const g = x.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
-  g.addColorStop(0.0, "rgba(0,0,0,0)");
-  g.addColorStop(0.42, "rgba(0,0,0,0)");
-  g.addColorStop(0.52, "rgba(255,240,210,0.95)"); // hot inner edge
-  g.addColorStop(0.6, "rgba(255,180,90,0.8)");
-  g.addColorStop(0.75, "rgba(220,120,60,0.4)");
-  g.addColorStop(1.0, "rgba(120,60,40,0)");
+  // radial base gradient (left→right = inner→outer edge of the ring)
+  const g = x.createLinearGradient(0, 0, S, 0);
+  g.addColorStop(0.0, "rgba(180,220,255,0.95)"); // hot blue-white inner
+  g.addColorStop(0.12, "rgba(255,244,220,0.95)");
+  g.addColorStop(0.4, "rgba(255,170,80,0.75)");
+  g.addColorStop(0.72, "rgba(210,90,50,0.4)");
+  g.addColorStop(1.0, "rgba(90,30,20,0)");
   x.fillStyle = g;
   x.fillRect(0, 0, S, S);
+  // angular streaks (Doppler-ish brightness variation around the ring)
+  x.globalCompositeOperation = "overlay";
+  let s = 7;
+  const rnd = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+  for (let i = 0; i < 220; i++) {
+    const y = rnd() * S;
+    const h = 1 + rnd() * 4;
+    const a = rnd() * 0.5;
+    x.fillStyle = rnd() < 0.5 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a * 0.7})`;
+    x.fillRect(rnd() * S * 0.3, y, S, h);
+  }
   const t = new THREE.CanvasTexture(c);
   t.minFilter = THREE.LinearFilter;
+  t.wrapT = THREE.RepeatWrapping;
   return t;
 }
 
@@ -214,6 +228,7 @@ export class GalaxyScene {
   private center = new THREE.Vector3();
   private panTarget = new THREE.Vector3();
   private accretion?: THREE.Mesh;
+  private accretionInner?: THREE.Mesh;
   private blackHole = new THREE.Group();
 
   constructor(private cb: GalaxySceneCallbacks = {}) {}
@@ -247,29 +262,48 @@ export class GalaxyScene {
     this.background.spawnComet(color);
   }
 
-  /* ── Backdrop: spiral dust galaxy (warm core, cyan arms) ── */
+  /** Fly the camera to the system holding a given item; returns the item. */
+  focusItemById(itemId: string): GalaxyItem | null {
+    for (const s of this.systems) {
+      for (const p of s.planets) {
+        if (p.item.id === itemId) {
+          this.panTarget.copy(s.group.position);
+          this.targetDist = 14;
+          return p.item;
+        }
+      }
+    }
+    return null;
+  }
+
+  /* ── Backdrop: procedural spiral galaxy (threejs-style generator) ── */
   private buildDisc() {
-    const N = 9000;
-    const arms = 3;
-    const maxR = 120;
-    const twist = 3.4;
+    const N = 26000;
+    const branches = 5;
+    const radius = 95;
+    const spin = 1.15;
+    const randomness = 0.24;
+    const randomnessPower = 3.2;
+    const inside = new THREE.Color(0xffb347); // warm gold core
+    const outside = new THREE.Color(0x6a3cff); // violet rim
+    const outside2 = new THREE.Color(0x2ec5ff); // hint of cyan at the far edge
     const pos = new Float32Array(N * 3);
     const col = new Float32Array(N * 3);
-    const core = new THREE.Color(0xffb066);
-    const mid = new THREE.Color(0xff7a3c);
-    const edge = new THREE.Color(0x39d0e6);
     for (let i = 0; i < N; i++) {
-      const r = Math.pow(Math.random(), 0.55) * maxR;
-      const arm = Math.floor(Math.random() * arms);
-      const angle = (arm / arms) * Math.PI * 2 + (r / maxR) * twist * Math.PI * 2 + gauss() * 0.35;
-      const jitter = gauss() * (2 + (r / maxR) * 10);
-      pos[i * 3] = Math.cos(angle) * r + jitter;
-      pos[i * 3 + 1] = gauss() * (6 * (1 - r / maxR) + 1.2); // thin disc, thicker core
-      pos[i * 3 + 2] = Math.sin(angle) * r + jitter;
-      const tRad = r / maxR;
-      const c = tRad < 0.35 ? core.clone().lerp(mid, tRad / 0.35) : mid.clone().lerp(edge, (tRad - 0.35) / 0.65);
-      // brighten the very core
-      const b = tRad < 0.12 ? 1.4 : 1;
+      const r = Math.pow(Math.random(), 0.7) * radius;
+      const branchAngle = ((i % branches) / branches) * Math.PI * 2;
+      const spinAngle = r * (spin / 10);
+      const rp = (x: number) =>
+        Math.pow(Math.random(), randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * randomness * (r + x);
+      const rx = rp(2);
+      const ry = rp(0.3) * 0.5; // thin disc
+      const rz = rp(2);
+      pos[i * 3] = Math.cos(branchAngle + spinAngle) * r + rx;
+      pos[i * 3 + 1] = ry;
+      pos[i * 3 + 2] = Math.sin(branchAngle + spinAngle) * r + rz;
+      const tRad = r / radius;
+      const c = tRad < 0.6 ? inside.clone().lerp(outside, tRad / 0.6) : outside.clone().lerp(outside2, (tRad - 0.6) / 0.4);
+      const b = tRad < 0.08 ? 1.6 : 1; // bright core
       col[i * 3] = Math.min(1, c.r * b);
       col[i * 3 + 1] = Math.min(1, c.g * b);
       col[i * 3 + 2] = Math.min(1, c.b * b);
@@ -280,11 +314,11 @@ export class GalaxyScene {
     this.disc = new THREE.Points(
       g,
       new THREE.PointsMaterial({
-        size: 0.7,
+        size: 0.55,
         map: this.softTex,
         vertexColors: true,
         transparent: true,
-        opacity: 0.9,
+        opacity: 0.95,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
         sizeAttenuation: true,
@@ -295,43 +329,69 @@ export class GalaxyScene {
     this.buildBlackHole();
   }
 
-  /* ── Supermassive black hole at the galactic centre (ref image) ── */
+  /* ── Supermassive black hole at the galactic centre ── */
   private buildBlackHole() {
     const bh = this.blackHole;
-    bh.position.set(0, -3, 0);
-    // event horizon: pure black sphere
-    const horizon = new THREE.Mesh(
-      new THREE.SphereGeometry(3.2, 32, 24),
-      new THREE.MeshBasicMaterial({ color: 0x000000 }),
-    );
+    bh.position.set(0, -3.4, 0);
+    bh.rotation.set(-0.5, 0, 0.14); // 3/4 view so the disk reads as a disk
+
+    // event horizon: pure black sphere, faintly larger shadow halo behind
+    const horizon = new THREE.Mesh(new THREE.SphereGeometry(2.6, 40, 28), new THREE.MeshBasicMaterial({ color: 0x000000 }));
     bh.add(horizon);
-    // accretion disk: a large flat ring, slightly tilted, additive
+
+    // main accretion disk — hot, streaky, spinning
     const disk = new THREE.Mesh(
-      new THREE.RingGeometry(3.4, 12, 96, 1),
+      new THREE.RingGeometry(2.9, 11, 160, 2),
       new THREE.MeshBasicMaterial({
         map: accretionTexture(),
         transparent: true,
-        opacity: 0.95,
+        opacity: 1,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
         side: THREE.DoubleSide,
       }),
     );
-    disk.rotation.x = Math.PI / 2 - 0.32; // tilt so we see it edge-on-ish
+    disk.rotation.x = Math.PI / 2;
     bh.add(disk);
     this.accretion = disk;
-    // photon ring: bright thin torus hugging the horizon (lensing halo)
+
+    // a second, fainter, faster inner disk for depth
+    const inner = new THREE.Mesh(
+      new THREE.RingGeometry(2.75, 5.5, 128, 1),
+      new THREE.MeshBasicMaterial({
+        map: accretionTexture(),
+        transparent: true,
+        opacity: 0.7,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    inner.rotation.x = Math.PI / 2;
+    bh.add(inner);
+    this.accretionInner = inner;
+
+    // photon ring: razor-bright torus hugging the horizon (lensing signature)
     const photon = new THREE.Mesh(
-      new THREE.TorusGeometry(3.35, 0.09, 12, 96),
-      new THREE.MeshBasicMaterial({ color: 0xfff0d0, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
+      new THREE.TorusGeometry(2.72, 0.06, 16, 160),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
-    photon.rotation.x = Math.PI / 2 - 0.32;
+    photon.rotation.x = Math.PI / 2;
     bh.add(photon);
-    // soft warm bloom behind it
-    const bloom = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffb070, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }),
+
+    // lensed light arcing OVER the top (the iconic Gargantua halo) — a vertical
+    // half-visible ring perpendicular to the disk
+    const lens = new THREE.Mesh(
+      new THREE.TorusGeometry(3.1, 0.14, 16, 160),
+      new THREE.MeshBasicMaterial({ color: 0xffe4b0, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
-    bloom.scale.set(30, 30, 1);
+    bh.add(lens);
+
+    // warm bloom
+    const bloom = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffc98a, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    bloom.scale.set(26, 26, 1);
     bh.add(bloom);
     this.world.add(bh);
   }
@@ -574,8 +634,10 @@ export class GalaxyScene {
   private bindInput(el: HTMLElement) {
     let panning = false;
     const onDown = (e: PointerEvent) => {
-      // free-nav: right-button or shift+left pans; otherwise orbit
-      panning = this.freeNav && (e.button === 2 || e.shiftKey);
+      // Free flight: plain drag PANS (move freely in X/Y), Shift/right-drag
+      // rotates the view. Locked: plain drag orbits the centre.
+      const rotateMod = e.button === 2 || e.shiftKey;
+      panning = this.freeNav && !rotateMod;
       this.dragging = !panning;
       this.lastX = this.downX = e.clientX;
       this.lastY = this.downY = e.clientY;
@@ -670,7 +732,8 @@ export class GalaxyScene {
     this.camera.lookAt(this.center);
 
     this.disc.rotation.y += dt * 0.012;
-    if (this.accretion) this.accretion.rotation.z += dt * 0.25; // swirling disk
+    if (this.accretion) this.accretion.rotation.z += dt * 0.35; // swirling disk
+    if (this.accretionInner) this.accretionInner.rotation.z -= dt * 0.6; // faster counter-swirl
     const nowMs = performance.now();
     const easeOut = (x: number) => 1 - Math.pow(1 - x, 3);
     for (const s of this.systems) {

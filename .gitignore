@@ -26,3 +26,4 @@ apps/desktop/public/data/
 .DS_Store
 Thumbs.db
 apps/desktop/.env
+apps/desktop/dist-web/
