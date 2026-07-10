@@ -30,7 +30,14 @@ export const useInventory = create<InventoryState>((set, get) => ({
     for (const [id, item] of next) {
       const old = prev.get(id);
       if (!old) events.push({ type: "added", item });
-      else if (old.description !== item.description || old.name !== item.name) events.push({ type: "updated", item });
+      else if (
+        old.description !== item.description ||
+        old.name !== item.name ||
+        // body-only edits: name/description unchanged but the file did change —
+        // without this, Sync ON never auto-pushes external content edits
+        old.fingerprint !== item.fingerprint
+      )
+        events.push({ type: "updated", item });
     }
     for (const id of prev.keys()) {
       if (!next.has(id)) events.push({ type: "removed", id });

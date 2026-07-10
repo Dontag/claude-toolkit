@@ -9,45 +9,10 @@ export const sourceState: { local: LocalFsSource | null } = { local: null };
 
 let booted = false;
 
-export async function bootstrapInventory(): Promise<void> {
-  if (booted) return;
-  booted = true;
-  const inv = useInventory.getState();
-  const local = await LocalFsSource.detect();
-  if (local) {
-    sourceState.local = local;
-    inv.setAll(await local.scan(), "local", local.root);
-    await local.subscribe(async () => {
-      const fresh = await local.scan();
-      const events = useInventory.getState().reconcile(fresh);
-      // external edits (any editor, or Claude itself) auto-push shared items
-      // with Sync ON, or mark them "local ahead" when Sync is OFF
-      for (const e of events) {
-        if (e.type === "removed") continue;
-        try {
-          await onLocalItemChanged(e.item, await local.readFile(e.item));
-        } catch {
-          /* transient read failure mid-write — next event catches up */
-        }
-      }
-    });
-  } else {
-    inv.setAll(await loadDemoInventory(), "demo", "demo data — no .claude folder found");
-  }
-}
-
-/** Manual rescan of the local tree (used by the Rescan button, catches any
- * change the OS watcher may have missed). No-op in demo mode. */
-export async function rescanLocal(): Promise<void> {
-  if (!sourceState.local) return;
-  const fresh = await sourceState.local.scan();
-  useInventory.getState().reconcile(fresh);
-}
-
-/** Create ~/.claude on demand (from demo mode) and go live. */
-export async function initClaudeFolder(): Promise<boolean> {
-  const local = await LocalFsSource.create();
-  if (!local) return false;
+/** Wire a local source: initial scan + watcher that diffs and syncs.
+ * External edits (any editor, or Claude itself) auto-push shared items
+ * with Sync ON, or mark them "local ahead" when Sync is OFF. */
+async function attachLocal(local: LocalFsSource): Promise<void> {
   sourceState.local = local;
   useInventory.getState().setAll(await local.scan(), "local", local.root);
   await local.subscribe(async () => {
@@ -58,9 +23,38 @@ export async function initClaudeFolder(): Promise<boolean> {
       try {
         await onLocalItemChanged(e.item, await local.readFile(e.item));
       } catch {
-        /* transient */
+        /* transient read failure mid-write — next event catches up */
       }
     }
   });
+}
+
+export async function bootstrapInventory(): Promise<void> {
+  if (booted) return;
+  booted = true;
+  const local = await LocalFsSource.detect();
+  if (local) await attachLocal(local);
+  else useInventory.getState().setAll(await loadDemoInventory(), "demo", "demo data — no .claude folder found");
+}
+
+/** Manual rescan of the local tree (used by the Rescan button, catches any
+ * change the OS watcher may have missed). Resolves false on failure so
+ * callers can toast honestly; no-op success in demo mode. */
+export async function rescanLocal(): Promise<boolean> {
+  if (!sourceState.local) return true;
+  try {
+    const fresh = await sourceState.local.scan();
+    useInventory.getState().reconcile(fresh);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Create ~/.claude on demand (from demo mode) and go live. */
+export async function initClaudeFolder(): Promise<boolean> {
+  const local = await LocalFsSource.create();
+  if (!local) return false;
+  await attachLocal(local);
   return true;
 }

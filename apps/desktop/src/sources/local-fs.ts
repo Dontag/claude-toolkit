@@ -23,15 +23,20 @@ const KIND_DIRS: Array<[string, ItemKind]> = [
   ["hooks", "hook"],
 ];
 
-async function fileAddedDate(path: string): Promise<string> {
+/** Added-date plus a size+mtime fingerprint so rescans can detect
+ * body-only edits (name/description unchanged) and still auto-push. */
+async function fileMeta(path: string): Promise<{ added: string; fingerprint: string }> {
   try {
     const s = await stat(path);
     const d = s.birthtime ?? s.mtime;
-    if (d) return new Date(d).toISOString().slice(0, 10);
+    return {
+      added: (d ? new Date(d) : new Date()).toISOString().slice(0, 10),
+      fingerprint: `${s.size}-${s.mtime ? new Date(s.mtime).getTime() : 0}`,
+    };
   } catch {
-    /* stat can fail mid-write; fall through */
+    /* stat can fail mid-write; next rescan gets the real value */
+    return { added: new Date().toISOString().slice(0, 10), fingerprint: "" };
   }
-  return new Date().toISOString().slice(0, 10);
 }
 
 export class LocalFsSource {
@@ -79,22 +84,24 @@ export class LocalFsSource {
             const full = await join(dirPath, entry.name, "SKILL.md");
             if (!(await exists(full))) continue;
             const parsed = parseItemFile(await readTextFile(full), entry.name);
+            const meta = await fileMeta(full);
             items.push({
               id: `skills/${entry.name}`,
               kind,
               path: rel,
-              added: await fileAddedDate(full),
+              added: meta.added,
+              fingerprint: meta.fingerprint,
               name: parsed.name,
               description: parsed.description,
               frontmatter: parsed.frontmatter,
             });
           } else if (kind !== "skill" && entry.isFile) {
             const isMd = entry.name.endsWith(".md");
-            const isHookScript = kind === "hook" && /\.(py|sh|js|mjs)$/.test(entry.name);
+            const isHookScript = kind === "hook" && /\.(py|sh|js|mjs|ps1)$/.test(entry.name);
             if (!isMd && !isHookScript) continue;
             if (kind === "hook" && /^(manifest\.json|settings-hooks\.json)$/.test(entry.name)) continue;
             const full = await join(dirPath, entry.name);
-            const base = entry.name.replace(/\.(md|py|sh|js|mjs)$/, "");
+            const base = entry.name.replace(/\.(md|py|sh|js|mjs|ps1)$/, "");
             let name = kind === "command" ? `/${base}` : base;
             let description = "";
             let frontmatter: Record<string, unknown> = {};
@@ -109,11 +116,13 @@ export class LocalFsSource {
               const m = /^(?:#!.*\n)?(?:#\s*(.+)|"""\s*([^\n"]+))/m.exec(src);
               description = (m?.[1] ?? m?.[2] ?? "").trim();
             }
+            const meta = await fileMeta(full);
             items.push({
               id: `${dir}/${base}`,
               kind,
               path: `${dir}/${entry.name}`,
-              added: await fileAddedDate(full),
+              added: meta.added,
+              fingerprint: meta.fingerprint,
               name,
               description,
               frontmatter,
@@ -166,8 +175,9 @@ export class LocalFsSource {
     await this.createItem("skill", name, `# ${name}\n\nDescribe when and how to use this skill.\n`, description);
   }
 
-  /** Relative path a new item of a given kind + slug should live at. */
-  static pathFor(kind: ItemKind, slug: string): string {
+  /** Relative path a new item of a given kind + slug should live at.
+   * Hooks keep their script language via `hookExt` (default python). */
+  static pathFor(kind: ItemKind, slug: string, hookExt = "py"): string {
     switch (kind) {
       case "skill":
         return `skills/${slug}/SKILL.md`;
@@ -176,7 +186,7 @@ export class LocalFsSource {
       case "command":
         return `commands/${slug}.md`;
       case "hook":
-        return `hooks/${slug}.py`;
+        return `hooks/${slug}.${hookExt}`;
     }
   }
 
@@ -185,8 +195,8 @@ export class LocalFsSource {
    * no frontmatter and the kind expects it (skill/agent/command), a minimal
    * `name`/`description` block is prepended so the tree + Galaxy read it right.
    */
-  async createItem(kind: ItemKind, slug: string, body: string, description = ""): Promise<string> {
-    const rel = LocalFsSource.pathFor(kind, slug);
+  async createItem(kind: ItemKind, slug: string, body: string, description = "", hookExt = "py"): Promise<string> {
+    const rel = LocalFsSource.pathFor(kind, slug, hookExt);
     let content = body;
     if (kind !== "hook" && !/^---\r?\n/.test(body.trimStart())) {
       const displayName = kind === "command" ? `/${slug}` : slug;
@@ -197,8 +207,8 @@ export class LocalFsSource {
   }
 
   /** True if an item of this kind+slug already exists (avoid clobbering). */
-  async itemExists(kind: ItemKind, slug: string): Promise<boolean> {
-    return exists(await join(this.root, LocalFsSource.pathFor(kind, slug)));
+  async itemExists(kind: ItemKind, slug: string, hookExt = "py"): Promise<boolean> {
+    return exists(await join(this.root, LocalFsSource.pathFor(kind, slug, hookExt)));
   }
 }
 

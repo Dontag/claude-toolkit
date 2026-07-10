@@ -13,6 +13,9 @@ export const ToolkitItem = z.object({
   path: z.string().min(1),
   /** ISO date the item first appeared */
   added: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  /** cheap content fingerprint (size+mtime) so watchers detect body-only
+   * edits without hashing; absent for sources that can't provide one */
+  fingerprint: z.string().optional(),
   /** raw frontmatter (agents carry `tools`, commands `argument-hint`, …) */
   frontmatter: z.record(z.string(), z.unknown()).default({}),
 });
