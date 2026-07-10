@@ -12,7 +12,7 @@ on" guide). This file is the detailed reference.
 |---|---|---|
 | Node | 22+ | `node -v` |
 | pnpm | 10+ | `npm i -g pnpm` |
-| Rust | pinned 1.93 | auto-selected by `apps/desktop/src-tauri/rust-toolchain.toml`; installed via rustup |
+| Rust | pinned 1.95 | auto-selected by `apps/desktop/src-tauri/rust-toolchain.toml`; installed via rustup |
 | MSVC build tools | any recent | Windows linker (VS Build Tools) |
 | Docker | optional | only for validating SQL migrations locally |
 
@@ -28,7 +28,7 @@ pnpm install            # at the repo root — installs all workspaces
 ```powershell
 cd apps\desktop
 $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"   # if a fresh shell can't find cargo
-$env:RUST_MIN_STACK = "33554432"                       # this machine needs bigger compiler stacks
+$env:RUST_MIN_STACK = "536870912"                       # this machine needs bigger compiler stacks
 pnpm tauri dev
 ```
 
@@ -182,7 +182,7 @@ webview). On this Windows machine:
 ```powershell
 cd apps\desktop
 $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"   # if cargo isn't found
-$env:RUST_MIN_STACK = "33554432"                       # this machine needs it
+$env:RUST_MIN_STACK = "536870912"                       # this machine needs it
 # Optional: sign the updater artifacts (see 8c). Without these two vars the
 # build still succeeds; it just won't emit .sig files / latest.json.
 $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content "$env:USERPROFILE\.tauri\claude-toolkit.key" -Raw
@@ -271,7 +271,7 @@ Run the site locally: `pnpm generate && pnpm --filter @claude-toolkit/site dev`.
 | Symptom | Fix |
 |---|---|
 | `cargo not found` | `$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"` or reopen terminal |
-| rustc crash building Tauri | ensured by the pinned 1.93 toolchain + `RUST_MIN_STACK=33554432` |
+| rustc crash building Tauri | ensured by the pinned 1.95 toolchain + `RUST_MIN_STACK=536870912` |
 | Port 1420 in use | close the old app window / kill `node`/`desktop.exe` |
 | Blank window | should be fixed; if it recurs, DevTools auto-opens in dev — check the console |
 | GitHub sign-in error | that provider isn't enabled in Supabase yet; use email, or enable it |

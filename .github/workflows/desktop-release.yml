@@ -51,6 +51,9 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # windows-msvc rustc overflows its stack compiling tauri-macros 2.6.3
+          # (0xc0000409) — give it a big stack; harmless on mac/linux
+          RUST_MIN_STACK: "536870912"
           # updater artifact signing (NOT OS code signing):
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}

@@ -1,5 +1,6 @@
-# rustc 1.96.1 ICEs (rustc_privacy delayed bug) compiling tauri-macros 2.6.3
-# on windows-msvc — pin a proven toolchain until a fixed rustc ships.
+# Version squeeze: tauri 2.6.3 (codegen/macros) needs newer inference than
+# 1.93.0 provides, but 1.96.1 ICEs (rustc_privacy delayed bug) on tauri-macros.
+# 1.95.0 sits between the two and compiles the current Tauri.
 [toolchain]
-channel = "1.93.0"
+channel = "1.95.0"
 profile = "minimal"

@@ -10,13 +10,13 @@ For the full production-build reference (per-OS outputs, signing, checklist) see
 ## 0. Prerequisites (✅ done on this machine)
 
 - Node 22, pnpm 10 — `pnpm install` at the repo root pulls all workspaces.
-- Rust (pinned to 1.93 via `apps/desktop/src-tauri/rust-toolchain.toml`) + MSVC linker.
+- Rust (pinned to 1.95 via `apps/desktop/src-tauri/rust-toolchain.toml`) + MSVC linker.
 - If a fresh terminal can't find `cargo`: `~/.cargo/bin` is on your user PATH — just reopen the terminal.
 
 Run the app in dev:
 ```powershell
 cd apps\desktop
-$env:RUST_MIN_STACK = "33554432"     # this machine needs bigger compiler stacks
+$env:RUST_MIN_STACK = "536870912"     # this machine needs bigger compiler stacks
 pnpm tauri dev
 ```
 Closing the window fully exits in dev (frees port 1420). First build ~1 min.
