@@ -44,6 +44,7 @@ window.SKILL_TREE_DATA = {
     { id: "cmd-newfeature",  name: "/new-feature",     category: "command", added: "2026-07-08", desc: "Idea → PRD → build → test → review, end to end.", file: "../commands/new-feature.md" }
   ],
   changelog: [
+    { date: "2026-07-10", title: "Claude Galaxy: audit fixes + scene overhaul", detail: "8 bugs fixed (hotkey draft loss, sync fingerprint, grant expiry, honest refresh, hook extensions, a11y dialogs). Black hole rebuilt (lensing, Doppler, jets, infall), wandering asteroids/comets/dust, purple milky-way tree sky, hash-stable colors for new kinds, mobile pass. Site: capsule nav, planets, new footer. 18 unit tests added.", tokensSaved: 12000, type: "feature" },
     { date: "2026-07-08", title: "Capability pack", detail: "Deep links (#item=...), keyboard shortcuts (/, Esc, P), copy-to-clipboard, changelog filters, tokens sparkline, tree level. Mobile: tap-outside hides the sheet.", tokensSaved: 0, type: "feature" },
     { date: "2026-07-08", title: "File viewer & downloads", detail: "View full skill/agent files and download them from the tree; toolkit .zip button; mobile scroll & tap fixes.", tokensSaved: 0, type: "feature" },
     { date: "2026-07-08", title: "Impact pack added", detail: "prd-writer & web-perf skills, security-auditor & docs-writer agents, /standup & /new-feature commands, fruit search on the tree.", tokensSaved: 0, type: "feature" },
