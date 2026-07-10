@@ -249,7 +249,24 @@ it manually from **Actions → Desktop release → Run workflow** (workflow_disp
 
 ---
 
-## 9. Common issues
+## 9. Site deployment (GitHub Pages — automatic)
+
+The marketing/download site + web demo deploy themselves. `.github/workflows/site.yml`
+runs on every push to `main` (and on each app release): it regenerates the
+toolkit inventory from `skills/ agents/ commands/ hooks/`, pulls release download
+links from the GitHub API, builds the Astro site in `apps/site/`, and publishes
+to GitHub Pages — no manual editing.
+
+- **One-time**: repo → Settings → Pages → Source: **GitHub Actions**.
+- Live site: `https://<user>.github.io/<repo>/`
+- Web (Galaxy-only) app: `https://<user>.github.io/<repo>/app/`
+- Legacy 3D dashboard: `https://<user>.github.io/<repo>/dashboard/`
+
+Run the site locally: `pnpm generate && pnpm --filter @claude-toolkit/site dev`.
+
+---
+
+## 10. Common issues
 
 | Symptom | Fix |
 |---|---|
