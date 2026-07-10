@@ -159,30 +159,37 @@ export async function pushVersion(item: ToolkitItem, content: string): Promise<b
   setBusy(item.id, true);
   try {
     const hash = await sha256(content);
-    const { data: last } = await supabase
-      .from("item_versions")
-      .select("version, content_hash")
-      .eq("item_id", meta.cloudItemId)
-      .order("version", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (last?.content_hash === hash) {
-      setMeta(item.id, { ...meta, localAhead: false });
-      return true; // nothing new
+    // read-max-then-insert can race a concurrent push on unique(item_id, version);
+    // on that collision, re-read the max and retry once
+    let ver: { id: string } | null = null;
+    for (let attempt = 0; attempt < 2 && !ver; attempt++) {
+      const { data: last } = await supabase
+        .from("item_versions")
+        .select("version, content_hash")
+        .eq("item_id", meta.cloudItemId)
+        .order("version", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (last?.content_hash === hash) {
+        setMeta(item.id, { ...meta, localAhead: false });
+        return true; // nothing new
+      }
+      const nextVersion = ((last?.version as number | undefined) ?? 0) + 1;
+      const { data, error } = await supabase
+        .from("item_versions")
+        .insert({
+          item_id: meta.cloudItemId,
+          version: nextVersion,
+          content,
+          content_hash: hash,
+          author_id: uid,
+        })
+        .select("id")
+        .single();
+      if (data) ver = data as { id: string };
+      else if (error?.code !== "23505") return false; // real failure; 23505 = duplicate version, retry
     }
-    const nextVersion = ((last?.version as number | undefined) ?? 0) + 1;
-    const { data: ver, error } = await supabase
-      .from("item_versions")
-      .insert({
-        item_id: meta.cloudItemId,
-        version: nextVersion,
-        content,
-        content_hash: hash,
-        author_id: uid,
-      })
-      .select("id")
-      .single();
-    if (error || !ver) return false;
+    if (!ver) return false;
     await supabase
       .from("toolkit_items")
       .update({

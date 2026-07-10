@@ -100,7 +100,11 @@ export const useSession = create<SessionState>((set) => ({
 
   signOut: async () => {
     if (!supabase) return;
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      /* offline: server revoke failed, but still sign out locally */
+    }
     set({ session: null, profile: null });
   },
 

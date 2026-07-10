@@ -4,7 +4,7 @@ import { useUi } from "../stores/ui";
 
 interface Props {
   /** does the actual refresh; should resolve when data is fresh */
-  onRefresh: () => Promise<void>;
+  onRefresh: () => Promise<unknown>;
   label?: string;
 }
 

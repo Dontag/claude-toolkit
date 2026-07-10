@@ -99,6 +99,10 @@ export async function markNotificationsRead(): Promise<void> {
   useAccess.setState((s) => ({ notifications: s.notifications.map((n) => ({ ...n, readAt: n.readAt ?? "now" })), unread: 0 }));
 }
 
+// Grant expiry is passive (a timestamp passing) — no realtime row event fires,
+// so schedule a refresh at the earliest expiry to prune the map client-side.
+let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+
 /** Pull requests, live grants, and notifications for the signed-in user. */
 export async function refreshAccess(): Promise<void> {
   if (!supabase) return;
@@ -158,6 +162,12 @@ export async function refreshAccess(): Promise<void> {
     notifications,
     unread: notifications.filter((n) => !n.readAt).length,
   });
+
+  clearTimeout(expiryTimer);
+  if (grantMap.size) {
+    const soonest = Math.min(...[...grantMap.values()].map((g) => new Date(g.expiresAt).getTime()));
+    expiryTimer = setTimeout(() => void refreshAccess(), Math.max(1000, soonest - Date.now() + 2000));
+  }
 }
 
 let subscribed = false;

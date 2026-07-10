@@ -38,8 +38,9 @@ interface ItemRow {
   toolkits: { owner_id: string; profiles: { handle: string; avatar_url: string | null } };
 }
 
-export async function fetchGalaxy(): Promise<void> {
-  if (!supabase) return;
+/** Resolves true when the fetch succeeded (so callers can toast honestly). */
+export async function fetchGalaxy(): Promise<boolean> {
+  if (!supabase) return false;
   useGalaxy.setState({ loading: true, error: null });
   const { data, error } = await supabase
     .from("toolkit_items")
@@ -52,7 +53,7 @@ export async function fetchGalaxy(): Promise<void> {
     .limit(500);
   if (error) {
     useGalaxy.setState({ loading: false, error: error.message });
-    return;
+    return false;
   }
   const items: GalaxyItem[] = ((data ?? []) as unknown as ItemRow[]).map((r) => ({
     id: r.id,
@@ -67,6 +68,7 @@ export async function fetchGalaxy(): Promise<void> {
     ownerAvatar: r.toolkits.profiles.avatar_url,
   }));
   useGalaxy.setState({ items, loading: false });
+  return true;
 }
 
 let subscribed = false;
