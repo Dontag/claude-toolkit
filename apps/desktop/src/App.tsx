@@ -202,7 +202,7 @@ export default function App() {
       <header className="z-30 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-black/30 px-3 backdrop-blur-xl">
         {/* left: brand + tabs */}
         <img src={LOGO} alt="" className="h-6 w-6 shrink-0" />
-        <span className="hidden text-sm font-bold tracking-tight sm:inline">Claude Toolkit</span>
+        <span className="hidden text-sm font-bold tracking-tight sm:inline">Claude Galaxy</span>
         <nav className="ml-1 flex gap-1">
           {!IS_WEB && <TabButton id="personal" label="🌱 Personal" />}
           <TabButton id="galaxy" label="🌌 Galaxy" />
@@ -212,7 +212,7 @@ export default function App() {
         <input
           ref={searchRef}
           placeholder={tab === "galaxy" ? "Search the galaxy…  ( / )" : "Search fruits…  ( / )"}
-          className="ml-auto w-40 rounded-lg border border-border bg-black/30 px-3 py-1.5 text-xs outline-none transition focus:border-brand md:w-56"
+          className="ml-auto w-24 min-w-0 rounded-lg border border-border bg-black/30 px-3 py-1.5 text-xs outline-none transition focus:border-brand sm:w-40 md:w-56"
           onKeyDown={(e) => {
             if (e.key === "Enter") search(e.currentTarget.value);
           }}

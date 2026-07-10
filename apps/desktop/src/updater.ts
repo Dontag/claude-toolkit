@@ -9,7 +9,7 @@ export async function checkForUpdates(): Promise<void> {
     const update = await check();
     if (!update) return;
     const yes = await ask(
-      `Claude Toolkit ${update.version} is available (you have ${update.currentVersion}).\n\nInstall and restart now?`,
+      `Claude Galaxy ${update.version} is available (you have ${update.currentVersion}).\n\nInstall and restart now?`,
       { title: "Update available", kind: "info", okLabel: "Update", cancelLabel: "Later" },
     );
     if (!yes) return;

@@ -14,18 +14,13 @@ import { proposeChange } from "../lib/proposals";
 import { fmtCountdown, useCountdown } from "../lib/useCountdown";
 import { confirm } from "../stores/confirm";
 import { Modal } from "./Modal";
+// palette for core kinds, hash-stable colors for anything new (plugins, …)
+import { kindColorHex } from "../lib/kind-color";
 
 const Editor = lazy(() => import("./Editor").then((m) => ({ default: m.Editor })));
 
 /** Imperative hook so the header search box can drive the Galaxy tab. */
 export const galaxySearchRef: { current: ((q: string) => void) | null } = { current: null };
-
-const KIND_COLOR: Record<string, string> = {
-  skill: "#ff6b7a",
-  agent: "#ffb057",
-  hook: "#a78bfa",
-  command: "#38d3e8",
-};
 
 /** "Request changes" on someone else's item (hidden on your own). */
 function RequestChangesButton({ item }: { item: GalaxyItem }) {
@@ -221,9 +216,9 @@ function GalaxyLive() {
       )}
 
       {selected && (
-        <aside className="hud-panel absolute right-4 top-4 z-10 w-[340px] max-h-[calc(100%-2rem)] overflow-y-auto p-4 backdrop-blur-xl">
+        <aside className="hud-panel absolute right-4 top-4 z-10 w-[340px] max-w-[calc(100vw-2rem)] max-h-[calc(100%-2rem)] overflow-y-auto p-4 backdrop-blur-xl">
           <div className="flex items-center justify-between gap-2">
-            <span className="hud-label" style={{ color: KIND_COLOR[selected.kind] }}>
+            <span className="hud-label" style={{ color: kindColorHex(selected.kind) }}>
               ◆ {selected.kind} signature
             </span>
             <button className="btn-ghost" onClick={() => setSelected(null)}>
@@ -235,7 +230,7 @@ function GalaxyLive() {
           <div className="mt-2 flex items-center gap-2">
             <span className="hud-label text-[9px]">signal</span>
             <div className="hud-bar flex-1">
-              <i style={{ background: KIND_COLOR[selected.kind] }} />
+              <i style={{ background: kindColorHex(selected.kind) }} />
             </div>
             <span className="hud-label text-[9px]">locked</span>
           </div>

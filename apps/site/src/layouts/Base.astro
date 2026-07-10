@@ -3,7 +3,7 @@ interface Props {
   title: string;
   description?: string;
 }
-const { title, description = "Claude Toolkit — a living 3D skill tree for your Claude Code setup." } = Astro.props;
+const { title, description = "Claude Galaxy — a living 3D skill tree for your Claude Code setup." } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 const nav = [
   { href: `${base}/`, label: "Home" },
@@ -77,7 +77,7 @@ const path = Astro.url.pathname;
   <div class="stars"></div>
   <header class="site">
     <div class="wrap">
-      <a class="logo" href={`${base}/`}>🌳 Claude Toolkit</a>
+      <a class="logo" href={`${base}/`}>🌳 Claude Galaxy</a>
       <nav class="main">
         {nav.map((n) => <a href={n.href} class={path === n.href || path === `${n.href}/` ? "active" : ""}>{n.label}</a>)}
       </nav>

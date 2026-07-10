@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Claude Toolkit",
+  "productName": "Claude Galaxy",
   "version": "0.1.0",
   "identifier": "com.dontag.claude-toolkit",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Claude Toolkit",
+        "title": "Claude Galaxy",
         "width": 1280,
         "height": 800,
         "minWidth": 900,
@@ -32,7 +32,9 @@
     },
     "deep-link": {
       "desktop": {
-        "schemes": ["claude-toolkit"]
+        "schemes": [
+          "claude-toolkit"
+        ]
       }
     }
   },

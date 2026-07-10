@@ -15,12 +15,7 @@ import { useAccess } from "../lib/access";
 import { fmtCountdown, useCountdown } from "../lib/useCountdown";
 import { Modal } from "./Modal";
 
-const KIND_COLOR: Record<string, string> = {
-  skill: "#ff6b7a",
-  agent: "#ffb057",
-  hook: "#a78bfa",
-  command: "#38d3e8",
-};
+import { kindColorHex } from "../lib/kind-color";
 
 export function ItemPanel() {
   const selectedId = useUi((s) => s.selectedId);
@@ -102,9 +97,9 @@ export function ItemPanel() {
 
   return (
     <>
-      <aside className="hud-panel absolute right-4 top-16 z-10 w-[340px] max-h-[calc(100%-6rem)] overflow-y-auto p-4 backdrop-blur-xl">
+      <aside className="hud-panel absolute right-4 top-16 z-10 w-[340px] max-w-[calc(100vw-2rem)] max-h-[calc(100%-6rem)] overflow-y-auto p-4 backdrop-blur-xl">
         <div className="flex items-center justify-between gap-2">
-          <span className="hud-label" style={{ color: KIND_COLOR[item.kind] }}>
+          <span className="hud-label" style={{ color: kindColorHex(item.kind) }}>
             ◆ {item.kind}
           </span>
           <button className="btn-ghost" onClick={() => useUi.getState().select(null)}>

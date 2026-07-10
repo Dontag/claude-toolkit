@@ -26,7 +26,7 @@ export function LoadingScreen({ done }: { done: boolean }) {
         <span className="load-ring-3 absolute inset-7 rounded-full border-l-2 border-[#d94bd0]" />
         <img src={LOGO} alt="" className="load-pulse h-20 w-20 drop-shadow-[0_0_24px_rgba(143,131,255,0.6)]" />
       </div>
-      <div className="mt-8 text-sm font-semibold tracking-wide text-text">Claude Toolkit</div>
+      <div className="mt-8 text-sm font-semibold tracking-wide text-text">Claude Galaxy</div>
       <div className="mt-1 text-[11px] tracking-[0.25em] text-muted uppercase">planting your galaxy…</div>
     </div>
   );

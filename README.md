@@ -1,6 +1,6 @@
-# Claude Dev Toolkit
+# Claude Galaxy
 
-A drop-in `.claude/` productivity pack **and** a desktop app that renders your Claude setup as a living 3D world.
+Claude Galaxy — a drop-in `.claude/` productivity pack **and** a desktop app that renders your Claude setup as a living 3D world.
 
 - **The toolkit** — skills, subagents, hooks, and slash commands covering design → build → test → review → ship → patch/tickets, plus token-saving rules.
 - **The desktop app** (`apps/desktop`, Tauri) — your `~/.claude` folder as a 3D tree that updates live; a **Galaxy** where each user is a solar system of shared items orbiting a black hole; per-item sharing, 30-minute exclusive edit windows, and propose-and-approve editing.

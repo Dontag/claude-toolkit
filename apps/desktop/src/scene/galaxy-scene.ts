@@ -10,7 +10,7 @@ import * as THREE from "three";
 import type { GalaxyItem } from "../lib/galaxy";
 import { userColor } from "../lib/presence";
 import { GalaxyBackground } from "./galaxy";
-import { CAT_COLOR } from "./scene";
+import { kindColor, kindLaneOrder } from "../lib/kind-color";
 
 interface Planet {
   mesh: THREE.Mesh;
@@ -33,6 +33,23 @@ interface System {
   spin: number;
   born: number;
 }
+
+/** An asteroid or comet drifting through the populated field. */
+interface Wanderer {
+  rock?: THREE.Mesh;
+  head?: THREE.Sprite;
+  trail: THREE.Line;
+  trailPos: Float32Array;
+  pos: THREE.Vector3;
+  vel: THREE.Vector3;
+  spin: THREE.Vector3;
+  life: number;
+  maxLife: number;
+  kind: "asteroid" | "comet";
+}
+
+const WANDER_TINTS = [0x7ce7f5, 0xa78bfa, 0xffb057, 0xffffff, 0xff6b7a];
+const WANDER_TRAIL = 30;
 
 export interface GalaxySceneCallbacks {
   onItemSelected?: (item: GalaxyItem | null) => void;
@@ -155,33 +172,63 @@ function planetTextures(kindColor: number, seed: number): { map: THREE.CanvasTex
 
 let seedCounter = 1;
 
-/** Accretion-disk texture: hot blue-white inner edge → orange, with angular
- * streaks so the spinning disk reads as turbulent matter (radial layout: the
- * ring maps radius→x, angle→y, so vertical streaks become swirls). */
-function accretionTexture(): THREE.CanvasTexture {
+/** Accretion-disk texture: hot blue-white inner edge → orange → deep ember,
+ * with fine angular streaks and dark turbulence lanes so the spinning disk
+ * reads as real matter (radial layout: the ring maps radius→x, angle→y, so
+ * horizontal features become concentric rings and vertical ones swirl). */
+function accretionTexture(seed = 7): THREE.CanvasTexture {
   const S = 512;
   const c = document.createElement("canvas");
   c.width = c.height = S;
   const x = c.getContext("2d")!;
+  let s = seed;
+  const rnd = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
   // radial base gradient (left→right = inner→outer edge of the ring)
   const g = x.createLinearGradient(0, 0, S, 0);
-  g.addColorStop(0.0, "rgba(180,220,255,0.95)"); // hot blue-white inner
-  g.addColorStop(0.12, "rgba(255,244,220,0.95)");
-  g.addColorStop(0.4, "rgba(255,170,80,0.75)");
-  g.addColorStop(0.72, "rgba(210,90,50,0.4)");
-  g.addColorStop(1.0, "rgba(90,30,20,0)");
+  g.addColorStop(0.0, "rgba(210,235,255,1)"); // hot blue-white inner
+  g.addColorStop(0.08, "rgba(255,250,235,0.98)");
+  g.addColorStop(0.22, "rgba(255,214,150,0.9)");
+  g.addColorStop(0.45, "rgba(255,160,72,0.7)");
+  g.addColorStop(0.7, "rgba(205,84,44,0.38)");
+  g.addColorStop(0.88, "rgba(120,38,26,0.14)");
+  g.addColorStop(1.0, "rgba(60,18,14,0)");
   x.fillStyle = g;
   x.fillRect(0, 0, S, S);
-  // angular streaks (Doppler-ish brightness variation around the ring)
+  // fine angular streaks (turbulent shear around the ring)
   x.globalCompositeOperation = "overlay";
-  let s = 7;
-  const rnd = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
-  for (let i = 0; i < 220; i++) {
+  for (let i = 0; i < 340; i++) {
     const y = rnd() * S;
-    const h = 1 + rnd() * 4;
+    const h = 0.6 + rnd() * 2.6;
     const a = rnd() * 0.5;
     x.fillStyle = rnd() < 0.5 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a * 0.7})`;
-    x.fillRect(rnd() * S * 0.3, y, S, h);
+    x.fillRect(rnd() * S * 0.35, y, S, h);
+  }
+  // dark turbulence lanes: concentric gaps that give the disk banding depth
+  x.globalCompositeOperation = "multiply";
+  for (let i = 0; i < 9; i++) {
+    const cxp = S * (0.2 + rnd() * 0.7);
+    const w = 3 + rnd() * 14;
+    const lg = x.createLinearGradient(cxp - w, 0, cxp + w, 0);
+    const d = 0.35 + rnd() * 0.35;
+    lg.addColorStop(0, "rgba(255,255,255,1)");
+    lg.addColorStop(0.5, `rgba(${255 * (1 - d)},${255 * (1 - d)},${255 * (1 - d)},1)`);
+    lg.addColorStop(1, "rgba(255,255,255,1)");
+    x.fillStyle = lg;
+    x.fillRect(cxp - w, 0, w * 2, S);
+  }
+  // hot clumps riding the inner half (bright knots of infalling matter)
+  x.globalCompositeOperation = "lighter";
+  for (let i = 0; i < 26; i++) {
+    const px = S * (0.05 + Math.pow(rnd(), 1.6) * 0.5);
+    const py = rnd() * S;
+    const r = 2 + rnd() * 8;
+    const cg = x.createRadialGradient(px, py, 0, px, py, r);
+    cg.addColorStop(0, `rgba(255,240,215,${0.25 + rnd() * 0.35})`);
+    cg.addColorStop(1, "rgba(255,240,215,0)");
+    x.fillStyle = cg;
+    x.beginPath();
+    x.arc(px, py, r, 0, Math.PI * 2);
+    x.fill();
   }
   const t = new THREE.CanvasTexture(c);
   t.minFilter = THREE.LinearFilter;
@@ -230,6 +277,17 @@ export class GalaxyScene {
   private accretion?: THREE.Mesh;
   private accretionInner?: THREE.Mesh;
   private blackHole = new THREE.Group();
+  private doppler?: THREE.Sprite;
+  private jets: THREE.Mesh[] = [];
+  private infall?: THREE.Points;
+  private infallR!: Float32Array;
+  private infallA!: Float32Array;
+  private infallY!: Float32Array;
+  // ambient wanderers: asteroids/comets that cross the system field at random
+  private wanderers: Wanderer[] = [];
+  private nextWanderAt = 0;
+  private driftDust?: THREE.Points;
+  private reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   constructor(private cb: GalaxySceneCallbacks = {}) {}
 
@@ -251,6 +309,8 @@ export class GalaxyScene {
     this.scene.add(this.world);
     this.buildDisc();
     this.buildNebulae();
+    this.buildDriftDust();
+    this.nextWanderAt = performance.now() + (2 + Math.random() * 4) * 1000;
     this.bindInput(el);
     this.animate();
   }
@@ -334,66 +394,125 @@ export class GalaxyScene {
     const bh = this.blackHole;
     bh.position.set(0, -3.4, 0);
     bh.rotation.set(-0.5, 0, 0.14); // 3/4 view so the disk reads as a disk
+    const additive = (opts: THREE.MeshBasicMaterialParameters) =>
+      new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, ...opts });
 
-    // event horizon: pure black sphere, faintly larger shadow halo behind
-    const horizon = new THREE.Mesh(new THREE.SphereGeometry(2.6, 40, 28), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+    // event horizon: pure black sphere + a darkening halo that eats the disc
+    // glow behind it, so the shadow reads even against the bright core
+    const horizon = new THREE.Mesh(new THREE.SphereGeometry(2.6, 48, 32), new THREE.MeshBasicMaterial({ color: 0x000000 }));
     bh.add(horizon);
+    const shadow = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: this.glowTex, color: 0x000000, transparent: true, opacity: 0.85, depthWrite: false }),
+    );
+    shadow.scale.set(7.6, 7.6, 1);
+    bh.add(shadow);
 
-    // main accretion disk — hot, streaky, spinning
+    // main accretion disk — hot, streaky, banded, spinning
     const disk = new THREE.Mesh(
-      new THREE.RingGeometry(2.9, 11, 160, 2),
-      new THREE.MeshBasicMaterial({
-        map: accretionTexture(),
-        transparent: true,
-        opacity: 1,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      }),
+      new THREE.RingGeometry(2.9, 11, 200, 4),
+      additive({ map: accretionTexture(7), side: THREE.DoubleSide }),
     );
     disk.rotation.x = Math.PI / 2;
     bh.add(disk);
     this.accretion = disk;
 
-    // a second, fainter, faster inner disk for depth
+    // a second, fainter, faster counter-swirling inner disk for turbulence depth
     const inner = new THREE.Mesh(
-      new THREE.RingGeometry(2.75, 5.5, 128, 1),
-      new THREE.MeshBasicMaterial({
-        map: accretionTexture(),
-        transparent: true,
-        opacity: 0.7,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      }),
+      new THREE.RingGeometry(2.75, 5.5, 160, 2),
+      additive({ map: accretionTexture(29), opacity: 0.7, side: THREE.DoubleSide }),
     );
     inner.rotation.x = Math.PI / 2;
     bh.add(inner);
     this.accretionInner = inner;
 
-    // photon ring: razor-bright torus hugging the horizon (lensing signature)
+    // photon ring: razor-thin white-hot line hugging the horizon, plus a
+    // fainter secondary ring just outside it (higher-order lensed image)
     const photon = new THREE.Mesh(
-      new THREE.TorusGeometry(2.72, 0.06, 16, 160),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }),
+      new THREE.TorusGeometry(2.72, 0.045, 16, 200),
+      additive({ color: 0xffffff, opacity: 1 }),
     );
     photon.rotation.x = Math.PI / 2;
     bh.add(photon);
-
-    // lensed light arcing OVER the top (the iconic Gargantua halo) — a vertical
-    // half-visible ring perpendicular to the disk
-    const lens = new THREE.Mesh(
-      new THREE.TorusGeometry(3.1, 0.14, 16, 160),
-      new THREE.MeshBasicMaterial({ color: 0xffe4b0, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false }),
+    const photon2 = new THREE.Mesh(
+      new THREE.TorusGeometry(2.88, 0.02, 12, 160),
+      additive({ color: 0xffe9c8, opacity: 0.35 }),
     );
-    bh.add(lens);
+    photon2.rotation.x = Math.PI / 2;
+    bh.add(photon2);
 
-    // warm bloom
+    // gravitational lensing: the far side of the disk appears folded OVER and
+    // UNDER the shadow (the Gargantua signature) — bright top arc, dim bottom
+    const lensTop = new THREE.Mesh(
+      new THREE.TorusGeometry(3.35, 0.11, 12, 140, Math.PI),
+      additive({ color: 0xffe8c0, opacity: 0.55 }),
+    );
+    bh.add(lensTop);
+    const lensBottom = new THREE.Mesh(
+      new THREE.TorusGeometry(3.0, 0.07, 12, 120, Math.PI),
+      additive({ color: 0xffd8a0, opacity: 0.22 }),
+    );
+    lensBottom.rotation.z = Math.PI;
+    bh.add(lensBottom);
+
+    // Doppler beaming: matter approaching the viewer glows hotter, so one
+    // side of the disk blooms brighter than the other
+    const doppler = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: this.softTex, color: 0xfff2d8, transparent: true, opacity: 0.42, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    doppler.position.set(4.8, 0.2, 0);
+    doppler.scale.set(9.5, 3.6, 1);
+    bh.add(doppler);
+    this.doppler = doppler;
+
+    // relativistic polar jets: faint cyan-white cones breathing along the axis
+    const jetGeo = new THREE.ConeGeometry(0.55, 10, 20, 1, true);
+    for (const dir of [1, -1] as const) {
+      const jet = new THREE.Mesh(jetGeo.clone(), additive({ color: 0x9fd8ff, opacity: 0.1, side: THREE.DoubleSide }));
+      jet.position.y = dir * 5.6;
+      if (dir === 1) jet.rotation.x = Math.PI;
+      bh.add(jet);
+      this.jets.push(jet);
+    }
+
+    this.buildInfall(bh);
+
+    // warm bloom over everything
     const bloom = new THREE.Sprite(
       new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffc98a, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
     bloom.scale.set(26, 26, 1);
     bh.add(bloom);
     this.world.add(bh);
+  }
+
+  /** Matter spiralling from the disk into the horizon: each mote orbits
+   * faster as it falls, resets to the outer disk when swallowed. */
+  private buildInfall(bh: THREE.Group) {
+    const N = 240;
+    this.infallR = new Float32Array(N);
+    this.infallA = new Float32Array(N);
+    this.infallY = new Float32Array(N);
+    const pos = new Float32Array(N * 3);
+    const col = new Float32Array(N * 3);
+    const inner = new THREE.Color(0xd6e9ff);
+    const outer = new THREE.Color(0xff9a4d);
+    for (let i = 0; i < N; i++) {
+      this.infallR[i] = 3 + Math.random() * 8;
+      this.infallA[i] = Math.random() * Math.PI * 2;
+      this.infallY[i] = gauss() * 0.1;
+      const c = inner.clone().lerp(outer, Math.min(1, (this.infallR[i]! - 2.6) / 8));
+      col[i * 3] = c.r;
+      col[i * 3 + 1] = c.g;
+      col[i * 3 + 2] = c.b;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    this.infall = new THREE.Points(
+      g,
+      new THREE.PointsMaterial({ size: 0.09, map: this.softTex, vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    bh.add(this.infall);
   }
 
   private buildNebulae() {
@@ -502,18 +621,19 @@ export class GalaxyScene {
 
       // Group items by kind into orbital lanes: each kind gets one ring, and
       // multiple items of that kind (e.g. several hooks) share the ring, spaced
-      // evenly around it. Lanes are ordered skills→agents→hooks→commands so a
-      // system's structure reads consistently across users.
-      const KIND_ORDER: Array<Planet["item"]["kind"]> = ["skill", "agent", "hook", "command"];
+      // evenly around it. Core kinds order skills→agents→hooks→commands so a
+      // system's structure reads consistently across users; any new kind (say
+      // "plugin") gets its own outer lane with a hash-stable color that every
+      // client derives identically.
       const planets: Planet[] = [];
       let lane = 0;
-      for (const kind of KIND_ORDER) {
-        const kindItems = ownerItems.filter((it) => it.kind === kind);
+      for (const kind of kindLaneOrder(ownerItems.map((it) => it.kind as string))) {
+        const kindItems = ownerItems.filter((it) => (it.kind as string) === kind);
         if (!kindItems.length) continue;
         const orbit = 2.4 + lane * 1.5; // one radius per populated kind
         const tilt = lane * 0.32 - 0.4;
         const roll = (lane % 2) * 0.22;
-        const kc = CAT_COLOR[kind];
+        const kc = kindColor(kind);
 
         // the shared lane ring (drawn once per kind)
         const holder = new THREE.Group();
@@ -578,6 +698,150 @@ export class GalaxyScene {
     this.knownItems = new Set(items.map((i) => i.id));
     // frame the whole galaxy as it expands (unless the user is navigating freely)
     if (!this.freeNav) this.targetDist = Math.max(24, 22 + Math.sqrt(n) * 10);
+  }
+
+  /** Sparse interstellar dust drifting through the whole system field. */
+  private buildDriftDust() {
+    const N = 1100;
+    const pos = new Float32Array(N * 3);
+    const col = new Float32Array(N * 3);
+    const tints = [new THREE.Color(0x8fb8ff), new THREE.Color(0xb8a1ff), new THREE.Color(0xffd9b0)];
+    for (let i = 0; i < N; i++) {
+      const r = 8 + Math.pow(Math.random(), 0.6) * 72;
+      const a = Math.random() * Math.PI * 2;
+      pos[i * 3] = Math.cos(a) * r;
+      pos[i * 3 + 1] = gauss() * 7;
+      pos[i * 3 + 2] = Math.sin(a) * r;
+      const c = tints[i % tints.length]!;
+      col[i * 3] = c.r;
+      col[i * 3 + 1] = c.g;
+      col[i * 3 + 2] = c.b;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    this.driftDust = new THREE.Points(
+      g,
+      new THREE.PointsMaterial({ size: 0.13, map: this.softTex, vertexColors: true, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    this.world.add(this.driftDust);
+  }
+
+  /** Spawn an asteroid (tumbling rock + dusty tail) or comet (bright head +
+   * long ion tail) on a path that crosses the populated field — aimed near a
+   * random solar system when one exists, so they visibly pass through. */
+  private spawnWanderer() {
+    if (this.reducedMotion || this.wanderers.length >= 5) return;
+    const kind: Wanderer["kind"] = Math.random() < 0.45 ? "asteroid" : "comet";
+    const a = Math.random() * Math.PI * 2;
+    const start = new THREE.Vector3(Math.cos(a) * 82, -4 + Math.random() * 18, Math.sin(a) * 82);
+    const sys = this.systems.length ? this.systems[Math.floor(Math.random() * this.systems.length)] : null;
+    const through = sys
+      ? sys.group.position.clone().add(new THREE.Vector3(gauss() * 4, gauss() * 2, gauss() * 4))
+      : new THREE.Vector3(gauss() * 14, gauss() * 4, gauss() * 14);
+    const speed = kind === "asteroid" ? 4.5 + Math.random() * 4 : 15 + Math.random() * 10;
+    const vel = through.sub(start).normalize().multiplyScalar(speed);
+    const col = WANDER_TINTS[Math.floor(Math.random() * WANDER_TINTS.length)]!;
+
+    let rock: THREE.Mesh | undefined;
+    let head: THREE.Sprite | undefined;
+    if (kind === "asteroid") {
+      rock = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(0.16 + Math.random() * 0.3, 0),
+        new THREE.MeshStandardMaterial({ color: 0x8a8377, roughness: 0.95, flatShading: true, emissive: 0x1c1611, emissiveIntensity: 0.6 }),
+      );
+      rock.position.copy(start);
+      this.world.add(rock);
+    } else {
+      head = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: this.glowTex, color: col, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
+      );
+      const hs = 1.1 + Math.random() * 0.8;
+      head.scale.set(hs, hs, 1);
+      head.position.copy(start);
+      this.world.add(head);
+    }
+
+    const trailPos = new Float32Array(WANDER_TRAIL * 3);
+    for (let i = 0; i < WANDER_TRAIL; i++) {
+      trailPos[i * 3] = start.x;
+      trailPos[i * 3 + 1] = start.y;
+      trailPos[i * 3 + 2] = start.z;
+    }
+    const tg = new THREE.BufferGeometry();
+    tg.setAttribute("position", new THREE.BufferAttribute(trailPos, 3));
+    const trail = new THREE.Line(
+      tg,
+      new THREE.LineBasicMaterial({
+        color: kind === "asteroid" ? 0xb59a7a : col,
+        transparent: true,
+        opacity: kind === "asteroid" ? 0.22 : 0.5,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    this.world.add(trail);
+
+    this.wanderers.push({
+      rock,
+      head,
+      trail,
+      trailPos,
+      pos: start.clone(),
+      vel,
+      spin: new THREE.Vector3(Math.random() * 1.6, Math.random() * 1.2, Math.random() * 0.8),
+      life: 0,
+      maxLife: 170 / speed, // enter, cross the field, and exit the far side
+      kind,
+    });
+  }
+
+  private stepWanderers(dt: number) {
+    const now = performance.now();
+    if (now >= this.nextWanderAt) {
+      this.spawnWanderer();
+      this.nextWanderAt = now + (7 + Math.random() * 13) * 1000;
+    }
+    for (let i = this.wanderers.length - 1; i >= 0; i--) {
+      const w = this.wanderers[i]!;
+      w.life += dt;
+      w.pos.addScaledVector(w.vel, dt);
+      if (w.rock) {
+        w.rock.position.copy(w.pos);
+        w.rock.rotation.x += w.spin.x * dt;
+        w.rock.rotation.y += w.spin.y * dt;
+        w.rock.rotation.z += w.spin.z * dt;
+      }
+      w.head?.position.copy(w.pos);
+      const p = w.trailPos;
+      for (let j = WANDER_TRAIL - 1; j > 0; j--) {
+        p[j * 3] = p[(j - 1) * 3]!;
+        p[j * 3 + 1] = p[(j - 1) * 3 + 1]!;
+        p[j * 3 + 2] = p[(j - 1) * 3 + 2]!;
+      }
+      p[0] = w.pos.x;
+      p[1] = w.pos.y;
+      p[2] = w.pos.z;
+      (w.trail.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+      const fade = Math.max(0, Math.min(1, Math.min(w.life / 0.8, (w.maxLife - w.life) / 1.2)));
+      if (w.head) (w.head.material as THREE.SpriteMaterial).opacity = 0.9 * fade;
+      (w.trail.material as THREE.LineBasicMaterial).opacity = (w.kind === "asteroid" ? 0.22 : 0.5) * fade;
+      if (w.life >= w.maxLife) {
+        if (w.rock) {
+          this.world.remove(w.rock);
+          w.rock.geometry.dispose();
+          (w.rock.material as THREE.Material).dispose();
+        }
+        if (w.head) {
+          this.world.remove(w.head);
+          w.head.material.dispose();
+        }
+        this.world.remove(w.trail);
+        w.trail.geometry.dispose();
+        (w.trail.material as THREE.Material).dispose();
+        this.wanderers.splice(i, 1);
+      }
+    }
   }
 
   private makeDust(color: number): THREE.Points {
@@ -732,8 +996,31 @@ export class GalaxyScene {
     this.camera.lookAt(this.center);
 
     this.disc.rotation.y += dt * 0.012;
+    if (this.driftDust) this.driftDust.rotation.y -= dt * 0.005; // counter-drift parallax
     if (this.accretion) this.accretion.rotation.z += dt * 0.35; // swirling disk
     if (this.accretionInner) this.accretionInner.rotation.z -= dt * 0.6; // faster counter-swirl
+    if (this.doppler) this.doppler.material.opacity = 0.38 + Math.sin(t * 2.7) * 0.07;
+    for (let j = 0; j < this.jets.length; j++) {
+      const m = this.jets[j]!.material as THREE.MeshBasicMaterial;
+      m.opacity = 0.08 + Math.sin(t * 1.3 + j * Math.PI) * 0.035 + 0.035;
+    }
+    // matter spiralling into the horizon: orbit faster as it falls, respawn outside
+    if (this.infall) {
+      const pos = this.infall.geometry.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < this.infallR.length; i++) {
+        let r = this.infallR[i]!;
+        this.infallA[i] = this.infallA[i]! + dt * (0.8 + 4 / r);
+        r -= dt * (0.12 + 0.9 / r);
+        if (r < 2.65) {
+          r = 5 + Math.random() * 6;
+          this.infallA[i] = Math.random() * Math.PI * 2;
+        }
+        this.infallR[i] = r;
+        pos.setXYZ(i, Math.cos(this.infallA[i]!) * r, this.infallY[i]!, Math.sin(this.infallA[i]!) * r);
+      }
+      pos.needsUpdate = true;
+    }
+    this.stepWanderers(dt);
     const nowMs = performance.now();
     const easeOut = (x: number) => 1 - Math.pow(1 - x, 3);
     for (const s of this.systems) {
@@ -786,6 +1073,13 @@ export class GalaxyScene {
     cancelAnimationFrame(this.raf);
     for (const c of this.cleanups) c();
     this.background.dispose();
+    // black hole, disc, dust, wanderers — everything parented to the world
+    this.world.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.geometry) m.geometry.dispose();
+      if (m.material) (m.material as THREE.Material).dispose();
+    });
+    for (const tx of this.planetTexes) tx.dispose();
     this.glowTex.dispose();
     this.softTex.dispose();
     this.renderer.dispose();

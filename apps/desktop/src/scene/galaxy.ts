@@ -133,6 +133,7 @@ export class GalaxyBackground {
           opacity,
           sizeAttenuation: true,
           depthWrite: false,
+          fog: false, // sky lives beyond the scene fog — keep it luminous
         }),
       );
       this.group.add(p);
@@ -152,6 +153,7 @@ export class GalaxyBackground {
           blending: THREE.AdditiveBlending,
           depthWrite: false,
           rotation: Math.random() * Math.PI * 2,
+          fog: false, // the tree scene's heavy fog would swallow the nebula
         }),
       );
       const a = (i / 11) * Math.PI * 2 + Math.random();
@@ -197,6 +199,7 @@ export class GalaxyBackground {
         opacity: kind === "comet" ? 0.95 : 0.0,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
+        fog: false,
       }),
     );
     const hs = kind === "comet" ? 1.6 + Math.random() : 0.6;
@@ -220,6 +223,7 @@ export class GalaxyBackground {
         opacity: kind === "comet" ? 0.55 : 0.2,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
+        fog: false,
       }),
     );
     this.group.add(trail);
