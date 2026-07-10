@@ -180,7 +180,16 @@ function GalaxyLive() {
 
   useEffect(() => {
     setContent(null);
-    if (selected) void fetchItemContent(selected).then(setContent);
+    if (!selected) return;
+    // stale-guard: a slow fetch for a previously selected item must not
+    // overwrite the content of the one selected (or version-bumped) after it
+    let stale = false;
+    void fetchItemContent(selected).then((c) => {
+      if (!stale) setContent(c);
+    });
+    return () => {
+      stale = true;
+    };
     // re-fetch when a realtime update moves the item's current version
   }, [selected?.id, selected?.currentVersionId]); // eslint-disable-line react-hooks/exhaustive-deps
 

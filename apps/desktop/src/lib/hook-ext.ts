@@ -15,7 +15,7 @@ export function inferHookExt(body: string, fromFileExt?: string): HookExt {
     if (/python/i.test(firstLine)) return "py";
     if (/\b(ba|z|da)?sh\b/.test(firstLine)) return "sh";
     if (/\b(node|bun|deno)\b/.test(firstLine)) return "mjs";
-    if (/\bpwsh|powershell\b/i.test(firstLine)) return "ps1";
+    if (/\b(pwsh|powershell)\b/i.test(firstLine)) return "ps1";
   }
   if (/^\s*(param\s*\(|\[CmdletBinding|Write-Host\b)/im.test(body)) return "ps1";
   return "py";

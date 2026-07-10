@@ -48,6 +48,21 @@ export function AddItemDialog({ onClose }: { onClose: () => void }) {
     }
   };
 
+  // Escape/✕/Cancel go through here: a filled-in form deserves a confirm,
+  // matching the editor and propose dialogs (no silent draft loss)
+  const requestClose = async () => {
+    if (name.trim() || desc.trim() || body.trim()) {
+      const ok = await confirm({
+        title: "Discard this new item?",
+        message: "The name and content you've entered haven't been saved.",
+        confirmLabel: "Discard",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    onClose();
+  };
+
   const save = async () => {
     const local = sourceState.local;
     if (!local) return showToast("No .claude folder to save into");
@@ -79,7 +94,7 @@ export function AddItemDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal
-      onClose={onClose}
+      onClose={() => void requestClose()}
       label="Add to your tree"
       panelClassName="hud-panel flex h-full max-h-[560px] w-full max-w-2xl flex-col p-5"
     >
@@ -87,7 +102,7 @@ export function AddItemDialog({ onClose }: { onClose: () => void }) {
           <span className="hud-label" style={{ color: "#5fae7d" }}>
             ✚ Add to your tree
           </span>
-          <button className="btn-ghost" onClick={onClose}>
+          <button className="btn-ghost" onClick={() => void requestClose()}>
             ✕
           </button>
         </div>
@@ -139,7 +154,7 @@ export function AddItemDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="mt-3 flex justify-end gap-2">
-          <button className="btn" onClick={onClose}>
+          <button className="btn" onClick={() => void requestClose()}>
             Cancel
           </button>
           <button className="btn-primary" onClick={save} disabled={busy}>

@@ -1,24 +1,13 @@
-import { useEffect } from "react";
 import { useConfirm } from "../stores/confirm";
 import { Modal } from "./Modal";
 
 /** Single app-wide confirm modal, driven by the confirm store.
- * Escape resolves false via the modal stack; Enter confirms. */
+ * Escape resolves false via the modal stack; Enter activates the focused
+ * button — Modal's mount focus lands on the autoFocus Confirm, and Tab can
+ * move to Cancel, so Enter always does what the focus ring shows. */
 export function ConfirmDialog() {
   const current = useConfirm((s) => s.current);
   const respond = useConfirm((s) => s.respond);
-
-  useEffect(() => {
-    if (!current) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Enter") {
-        e.stopPropagation();
-        respond(true);
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [current, respond]);
 
   if (!current) return null;
 

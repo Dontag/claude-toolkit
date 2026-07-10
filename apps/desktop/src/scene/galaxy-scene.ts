@@ -278,6 +278,7 @@ export class GalaxyScene {
   private accretionInner?: THREE.Mesh;
   private blackHole = new THREE.Group();
   private doppler?: THREE.Sprite;
+  private accretionTexes: THREE.Texture[] = [];
   private jets: THREE.Mesh[] = [];
   private infall?: THREE.Points;
   private infallR!: Float32Array;
@@ -408,9 +409,12 @@ export class GalaxyScene {
     bh.add(shadow);
 
     // main accretion disk — hot, streaky, banded, spinning
+    const diskTex = accretionTexture(7);
+    const innerTex = accretionTexture(29);
+    this.accretionTexes.push(diskTex, innerTex); // material.dispose() won't free maps
     const disk = new THREE.Mesh(
       new THREE.RingGeometry(2.9, 11, 200, 4),
-      additive({ map: accretionTexture(7), side: THREE.DoubleSide }),
+      additive({ map: diskTex, side: THREE.DoubleSide }),
     );
     disk.rotation.x = Math.PI / 2;
     bh.add(disk);
@@ -419,7 +423,7 @@ export class GalaxyScene {
     // a second, fainter, faster counter-swirling inner disk for turbulence depth
     const inner = new THREE.Mesh(
       new THREE.RingGeometry(2.75, 5.5, 160, 2),
-      additive({ map: accretionTexture(29), opacity: 0.7, side: THREE.DoubleSide }),
+      additive({ map: innerTex, opacity: 0.7, side: THREE.DoubleSide }),
     );
     inner.rotation.x = Math.PI / 2;
     bh.add(inner);
@@ -1080,6 +1084,7 @@ export class GalaxyScene {
       if (m.material) (m.material as THREE.Material).dispose();
     });
     for (const tx of this.planetTexes) tx.dispose();
+    for (const tx of this.accretionTexes) tx.dispose();
     this.glowTex.dispose();
     this.softTex.dispose();
     this.renderer.dispose();

@@ -26,9 +26,12 @@ export function Modal({ onClose, label, panelClassName, backdropClassName, child
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     const unregister = pushModal(() => closeRef.current());
-    // move focus inside so keystrokes land in the dialog
-    const first = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
-    (first ?? panelRef.current)?.focus();
+    // move focus inside so keystrokes land in the dialog; an [autofocus]
+    // child wins (e.g. the Confirm button) so Enter activates the intended
+    // default action, never a button it happened to find first
+    const panel = panelRef.current;
+    const first = panel?.querySelector<HTMLElement>("[autofocus]") ?? panel?.querySelector<HTMLElement>(FOCUSABLE);
+    (first ?? panel)?.focus();
     return () => {
       unregister();
       prev?.focus?.();
