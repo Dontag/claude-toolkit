@@ -13,6 +13,7 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#05030f" />
   <meta name="description" content="Claude Galaxy — your Claude setup as a living 3D tree, and a shared galaxy of skills." />
   <link rel="icon" type="image/svg+xml" href={`${base}/logo.svg`} />
   <title>Claude Galaxy — a living galaxy for your Claude setup</title>
@@ -22,7 +23,7 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
       --brand:#8f83ff; --brand2:#7ce7f5; --magenta:#d94bd0; --violet:#7a3cf0;
     }
     *{margin:0;padding:0;box-sizing:border-box}
-    html{scroll-behavior:smooth}
+    html{scroll-behavior:smooth;background:var(--bg)}
     body{background:var(--bg);color:#e7e9f4;font:16px/1.6 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;overflow-x:hidden}
     a{color:#7ce7f5;text-decoration:none}
     /* fixed 3D sky behind everything */
@@ -191,9 +192,10 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
     .foot-col b{display:block;color:#e7e9f4;font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:12px}
     .foot-col a{display:block;color:#9aa3c7;padding:4px 0;transition:.15s}
     .foot-col a:hover{color:#7ce7f5}
-    .fine{margin-top:34px;padding-top:18px;border-top:1px solid var(--border);display:flex;gap:12px;flex-wrap:wrap;
+    .fine{margin-top:36px;padding-top:26px;border-top:1px solid var(--border);display:flex;gap:12px;flex-wrap:wrap;
       justify-content:space-between;color:#6f77a0;font-size:12.5px}
     @media (max-width:720px){.foot-grid{grid-template-columns:1fr;gap:24px}}
+    @media (max-width:640px){.fine{flex-direction:column;gap:8px;padding-top:24px;margin-top:30px;text-align:center;justify-content:center}}
     /* reveal animation */
     .reveal{opacity:0;transform:translateY(46px);transition:opacity .9s cubic-bezier(.16,1,.3,1),transform .9s cubic-bezier(.16,1,.3,1)}
     .reveal.in{opacity:1;transform:none}

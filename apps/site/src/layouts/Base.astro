@@ -17,6 +17,7 @@ const isActive = (href: string) => path === href || path === `${href}/`;
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#05070f" />
   <meta name="description" content={description} />
   <link rel="icon" type="image/svg+xml" href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/logo.svg`} />
   <title>{title}</title>
@@ -28,7 +29,9 @@ const isActive = (href: string) => path === href || path === `${href}/`;
       --skill:#ff6b7a; --agent:#ffb057; --hook:#a78bfa; --command:#38d3e8; --success:#34d399;
     }
     *{margin:0;padding:0;box-sizing:border-box}
-    html{scroll-behavior:smooth}
+    /* html bg matches the page so mobile browser chrome + overscroll bounce
+       stay dark instead of flashing white */
+    html{scroll-behavior:smooth;background:var(--bg0)}
     body{
       color:var(--text);font:16px/1.6 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
       background:
