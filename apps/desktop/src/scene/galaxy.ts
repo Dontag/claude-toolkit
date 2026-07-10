@@ -92,10 +92,11 @@ export class GalaxyBackground {
   private tex = glowTexture();
   private nebulaTexes = [nebulaTexture(101), nebulaTexture(202), nebulaTexture(303), nebulaTexture(404)];
   private nebulae: THREE.Sprite[] = [];
+  private bandClouds: THREE.Sprite[] = []; // milky-way band, breathes separately
   private starLayers: THREE.Points[] = [];
   private reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  constructor() {
+  constructor(opts: { milkyWay?: boolean } = {}) {
     // three star shells at different radii for parallax depth
     const shells: Array<[number, number, number, number]> = [
       // [count, radius, size, opacity]
@@ -165,7 +166,102 @@ export class GalaxyBackground {
       this.nebulae.push(s);
     }
 
+    if (opts.milkyWay) this.buildMilkyWay();
     this.scheduleNext(true);
+  }
+
+  /** A dense purple milky-way band wrapping the whole sky on a tilted great
+   * circle: layered violet clouds, bright core knots, and a river of small
+   * stars embedded in the gas — so the band reads from every camera angle. */
+  private buildMilkyWay() {
+    const R = 105;
+    const incl = 0.62; // band inclination
+    const onBand = (s: number, jitter = 0) => {
+      const j = () => (Math.random() - 0.5) * jitter;
+      return new THREE.Vector3(
+        R * Math.cos(s) + j(),
+        R * Math.sin(s) * Math.sin(incl) + j(),
+        R * Math.sin(s) * Math.cos(incl) + j(),
+      );
+    };
+    // gas clouds along the ring — deep violet → magenta → periwinkle
+    const tints = [0x7a3cf0, 0xa64bff, 0x5a2fd0, 0xd94bd0, 0x8f83ff];
+    for (let i = 0; i < 30; i++) {
+      const s = (i / 30) * Math.PI * 2;
+      const sp = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: this.nebulaTexes[i % this.nebulaTexes.length],
+          color: tints[i % tints.length],
+          transparent: true,
+          opacity: 0.24 + Math.random() * 0.2,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          rotation: Math.random() * Math.PI * 2,
+          fog: false,
+        }),
+      );
+      sp.position.copy(onBand(s, 26));
+      const size = 46 + Math.random() * 52;
+      sp.scale.set(size, size * (0.55 + Math.random() * 0.35), 1);
+      sp.userData.baseOpacity = sp.material.opacity;
+      this.group.add(sp);
+      this.bandClouds.push(sp);
+    }
+    // bright core knots (the hot pink-white blooms in the reference)
+    for (let i = 0; i < 4; i++) {
+      const knot = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: this.tex,
+          color: i % 2 ? 0xf0dcff : 0xe6c8ff,
+          transparent: true,
+          opacity: 0.4 + Math.random() * 0.2,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          fog: false,
+        }),
+      );
+      knot.position.copy(onBand(0.6 + i * 1.5, 14));
+      const ks = 18 + Math.random() * 20;
+      knot.scale.set(ks, ks * 0.8, 1);
+      knot.userData.baseOpacity = knot.material.opacity;
+      this.group.add(knot);
+      this.bandClouds.push(knot);
+    }
+    // a river of small stars embedded in the gas
+    const N = 1600;
+    const pos = new Float32Array(N * 3);
+    const col = new Float32Array(N * 3);
+    const starTints = [0xffffff, 0xe8ddff, 0xc9b3ff, 0xa78bfa, 0x9fd8ff];
+    for (let i = 0; i < N; i++) {
+      const s = Math.random() * Math.PI * 2;
+      const p = onBand(s, 30);
+      pos[i * 3] = p.x;
+      pos[i * 3 + 1] = p.y;
+      pos[i * 3 + 2] = p.z;
+      const c = new THREE.Color(starTints[Math.floor(Math.random() * starTints.length)]!);
+      col[i * 3] = c.r;
+      col[i * 3 + 1] = c.g;
+      col[i * 3 + 2] = c.b;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    const stars = new THREE.Points(
+      g,
+      new THREE.PointsMaterial({
+        size: 0.5,
+        map: this.tex,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.85,
+        sizeAttenuation: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        fog: false,
+      }),
+    );
+    this.group.add(stars);
+    this.starLayers.push(stars);
   }
 
   /** Phase 2: presence-driven dynamicity. 0 = alone, each online user adds energy. */
@@ -247,7 +343,7 @@ export class GalaxyBackground {
     this.group.rotation.y += dt * 0.004;
     for (let i = 0; i < this.starLayers.length; i++) {
       const m = this.starLayers[i]!.material as THREE.PointsMaterial;
-      const base = [0.8, 0.55, 0.4][i]!;
+      const base = [0.8, 0.55, 0.4][i] ?? 0.85; // extra layers (milky-way river) stay bright
       m.opacity = base + Math.sin(t * (0.4 + i * 0.23)) * 0.08;
     }
     // nebula clouds slowly breathe + drift for a living volumetric feel
@@ -255,6 +351,13 @@ export class GalaxyBackground {
       const m = this.nebulae[i]!.material as THREE.SpriteMaterial;
       m.rotation += dt * 0.01 * (i % 2 ? 1 : -1);
       m.opacity = 0.3 + Math.sin(t * 0.18 + i) * 0.08;
+    }
+    // the milky-way band shimmers around each cloud's own base opacity
+    for (let i = 0; i < this.bandClouds.length; i++) {
+      const sp = this.bandClouds[i]!;
+      const m = sp.material as THREE.SpriteMaterial;
+      m.rotation += dt * 0.006 * (i % 2 ? 1 : -1);
+      m.opacity = (sp.userData.baseOpacity as number) + Math.sin(t * 0.22 + i * 1.7) * 0.06;
     }
 
     if (!this.reducedMotion && performance.now() >= this.nextSpawn) {

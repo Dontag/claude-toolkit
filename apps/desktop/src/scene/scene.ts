@@ -146,7 +146,8 @@ export class SkillTreeScene {
     fill.position.set(-8, 6, -6);
     this.scene.add(fill);
 
-    this.galaxy = new GalaxyBackground();
+    // milkyWay: the tree sits under a dense purple star-band sky (ref image)
+    this.galaxy = new GalaxyBackground({ milkyWay: true });
     this.scene.add(this.galaxy.group);
 
     this.buildStatics();

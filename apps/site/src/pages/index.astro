@@ -22,13 +22,22 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     #sky{position:fixed;inset:0;z-index:0}
     .veil{position:fixed;inset:0;z-index:1;pointer-events:none;
       background:radial-gradient(120% 80% at 50% 10%,transparent 30%,rgba(5,3,15,.55) 75%,rgba(5,3,15,.92) 100%)}
-    /* nav */
-    nav{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;gap:18px;
-      padding:14px 28px;background:rgba(5,3,15,.35);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
-    nav .logo{font-weight:800;letter-spacing:-.02em;color:#e7e9f4}
-    nav .links{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
-    nav .links a{color:#9aa3c7;font-size:13px;padding:6px 12px;border-radius:9px;transition:.15s}
-    nav .links a:hover{color:#e7e9f4;background:rgba(143,131,255,.12)}
+    /* nav — floating glowing capsule */
+    nav{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:20;display:flex;align-items:center;gap:14px;
+      width:max-content;max-width:calc(100vw - 20px);padding:10px 12px 10px 22px;border-radius:999px;
+      border:1px solid rgba(143,131,255,.4);background:rgba(8,10,25,.55);backdrop-filter:blur(14px);
+      box-shadow:0 0 26px rgba(143,131,255,.22),inset 0 0 20px rgba(122,60,240,.12);
+      animation:nav-glow 4.5s ease-in-out infinite}
+    nav::before{content:"";position:absolute;inset:-1px;border-radius:999px;pointer-events:none;
+      background:linear-gradient(100deg,rgba(143,131,255,.5),rgba(217,75,208,.35),rgba(124,231,245,.5)) border-box;
+      -webkit-mask:linear-gradient(#fff 0 0) padding-box,linear-gradient(#fff 0 0);
+      -webkit-mask-composite:xor;mask-composite:exclude;padding:1px;opacity:.7}
+    nav .logo{font-weight:800;letter-spacing:-.02em;color:#e7e9f4;white-space:nowrap}
+    nav .links{display:flex;gap:2px;flex-wrap:wrap;justify-content:flex-end}
+    nav .links a{color:#9aa3c7;font-size:13px;padding:6px 12px;border-radius:99px;transition:.15s;white-space:nowrap}
+    nav .links a:hover{color:#e7e9f4;background:rgba(143,131,255,.16)}
+    @keyframes nav-glow{0%,100%{box-shadow:0 0 20px rgba(143,131,255,.2),inset 0 0 20px rgba(122,60,240,.1)}
+      50%{box-shadow:0 0 38px rgba(124,231,245,.3),inset 0 0 24px rgba(122,60,240,.18)}}
     section{position:relative;z-index:2}
     .wrap{max-width:1080px;margin:0 auto;padding:0 28px}
     /* hero */
@@ -52,8 +61,13 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       transform:translateX(-120%);animation:sheen 3.6s ease-in-out infinite}
     .btn.primary:hover{box-shadow:0 12px 44px rgba(143,131,255,.45)}
     .btn.ghost:hover{border-color:#8f83ff;box-shadow:0 8px 30px rgba(143,131,255,.25)}
-    .scroll-hint{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);color:#9aa3c7;font-size:11px;
-      letter-spacing:.2em;text-transform:uppercase;animation:bob 2.2s ease-in-out infinite}
+    .scroll-hint{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;
+      align-items:center;gap:9px;color:#9aa3c7;font-size:10px;letter-spacing:.28em;text-transform:uppercase}
+    .mouse{width:26px;height:42px;border:1.5px solid rgba(154,163,199,.65);border-radius:14px;position:relative;
+      box-shadow:0 0 16px rgba(124,231,245,.18),inset 0 0 8px rgba(143,131,255,.12)}
+    .mouse i{position:absolute;left:50%;top:7px;width:4px;height:9px;margin-left:-2px;border-radius:3px;
+      background:linear-gradient(#7ce7f5,#8f83ff);animation:wheel 1.8s ease-in-out infinite}
+    @keyframes wheel{0%{transform:translateY(0);opacity:1}70%{transform:translateY(15px);opacity:0}100%{transform:translateY(0);opacity:0}}
     /* story sections */
     .story{padding:18vh 0}
     .kicker{font:600 11px/1 ui-monospace,monospace;letter-spacing:.22em;text-transform:uppercase;color:#7ce7f5;margin-bottom:14px}
@@ -88,7 +102,18 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     .founder blockquote{color:#b9c0dd;font-size:16px;line-height:1.7;max-width:560px}
     /* final cta */
     .finale{padding:18vh 0 22vh;text-align:center}
-    footer{position:relative;z-index:2;border-top:1px solid var(--border);padding:26px 0;color:#9aa3c7;font-size:13px}
+    footer{position:relative;z-index:2;padding:0 0 30px;color:#9aa3c7;font-size:13.5px}
+    footer::before{content:"";display:block;height:1px;margin-bottom:38px;
+      background:linear-gradient(90deg,transparent,rgba(143,131,255,.55),rgba(124,231,245,.45),transparent)}
+    .foot-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:34px;align-items:start}
+    .foot-grid .logo{font-weight:800;font-size:16px;color:#e7e9f4}
+    .foot-grid p{margin-top:10px;max-width:320px;line-height:1.65}
+    .foot-col b{display:block;color:#e7e9f4;font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:12px}
+    .foot-col a{display:block;color:#9aa3c7;padding:4px 0;transition:.15s}
+    .foot-col a:hover{color:#7ce7f5}
+    .fine{margin-top:34px;padding-top:18px;border-top:1px solid var(--border);display:flex;gap:12px;flex-wrap:wrap;
+      justify-content:space-between;color:#6f77a0;font-size:12.5px}
+    @media (max-width:720px){.foot-grid{grid-template-columns:1fr;gap:24px}}
     /* reveal animation */
     .reveal{opacity:0;transform:translateY(46px);transition:opacity .9s cubic-bezier(.16,1,.3,1),transform .9s cubic-bezier(.16,1,.3,1)}
     .reveal.in{opacity:1;transform:none}
@@ -105,7 +130,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     @keyframes spin{to{transform:rotate(360deg)}}
     @media (prefers-reduced-motion: reduce){
       .reveal{opacity:1;transform:none;transition:none}
-      h1 .grad,.btn.primary::after,.scroll-hint,.founder-photo::before,.eyebrow{animation:none}
+      h1 .grad,.btn.primary::after,.mouse i,.founder-photo::before,.eyebrow,nav{animation:none}
     }
   </style>
 </head>
@@ -138,7 +163,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
         <button class="btn ghost" id="downloadBtn">⬇ Download the desktop app</button>
       </div>
     </div>
-    <div class="scroll-hint">scroll ↓</div>
+    <div class="scroll-hint"><span class="mouse"><i></i></span><span>scroll</span></div>
   </section>
 
   <section class="story">
@@ -191,7 +216,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       <div class="founder-card reveal">
         <div class="founder-photo"><img src={`${base}/img/founder.jpeg`} alt="Founder" /></div>
         <div>
-          <h3>Nishad Sur</h3>
+          <h3>Nishad Patil</h3>
           <div class="role">Founder & Builder</div>
           <blockquote>
             “I built this because my <code>.claude</code> folder became the most valuable directory on my
@@ -215,7 +240,30 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   </section>
 
   <footer>
-    <div class="wrap">Open source · <a href="https://github.com/Dontag/claude-toolkit">GitHub</a> · Built with Claude Code</div>
+    <div class="wrap foot-grid">
+      <div>
+        <div class="logo">🌌 Claude Galaxy</div>
+        <p>Your Claude setup as a living tree — and a shared galaxy where every creator is a solar
+           system orbiting the same black hole.</p>
+      </div>
+      <div class="foot-col">
+        <b>Product</b>
+        <a href={`${base}/toolkit`}>Toolkit</a>
+        <a href={`${base}/changelog`}>Changelog</a>
+        <a href={`${base}/download`}>Download</a>
+        <a href={`${base}/app/`}>Explore online</a>
+      </div>
+      <div class="foot-col">
+        <b>Project</b>
+        <a href="https://github.com/Dontag/claude-toolkit">GitHub</a>
+        <a href="https://github.com/Dontag/claude-toolkit/issues/new">Report an issue</a>
+        <a href={`${base}/dashboard/`}>Web demo</a>
+      </div>
+    </div>
+    <div class="wrap fine">
+      <span>© 2026 Claude Galaxy · Crafted by Nishad Patil</span>
+      <span>Open source · Built with Claude Code</span>
+    </div>
   </footer>
 
   <div id="toast"></div>
@@ -337,6 +385,91 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       scene.add(sp);
       nebulae.push(sp);
     }
+    /* planets — shaded sprite globes (one ringed) drifting at statement
+       depths, so the tall scroll sections aren't empty space */
+    function planetTex(tint: [number, number, number], ring: boolean, seed: number): THREE.CanvasTexture {
+      const S = 256, c = document.createElement("canvas");
+      c.width = c.height = S;
+      const x = c.getContext("2d")!;
+      let s = seed;
+      const rnd = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+      const [r, g, b] = tint;
+      const cx = S / 2, cy = S / 2, R = S * 0.34;
+      // sphere shading: lit upper-left → deep shadow lower-right
+      const grad = x.createRadialGradient(cx - R * 0.45, cy - R * 0.5, R * 0.1, cx, cy, R);
+      grad.addColorStop(0, `rgba(${Math.min(255, r + 90)},${Math.min(255, g + 90)},${Math.min(255, b + 90)},1)`);
+      grad.addColorStop(0.55, `rgba(${r},${g},${b},1)`);
+      grad.addColorStop(1, `rgba(${(r * 0.25) | 0},${(g * 0.25) | 0},${(b * 0.25) | 0},1)`);
+      x.fillStyle = grad;
+      x.beginPath(); x.arc(cx, cy, R, 0, 7); x.fill();
+      // faint latitude bands
+      x.save();
+      x.beginPath(); x.arc(cx, cy, R, 0, 7); x.clip();
+      for (let i = 0; i < 5; i++) {
+        x.fillStyle = `rgba(255,255,255,${0.04 + rnd() * 0.05})`;
+        x.fillRect(cx - R, cy - R + rnd() * R * 2, R * 2, 2 + rnd() * 7);
+      }
+      x.restore();
+      // atmosphere rim
+      x.strokeStyle = `rgba(${Math.min(255, r + 70)},${Math.min(255, g + 70)},${Math.min(255, b + 70)},.5)`;
+      x.lineWidth = 2.5;
+      x.beginPath(); x.arc(cx, cy, R + 1.5, 0, 7); x.stroke();
+      if (ring) {
+        x.strokeStyle = `rgba(${Math.min(255, r + 60)},${Math.min(255, g + 60)},${Math.min(255, b + 60)},.55)`;
+        x.lineWidth = 5;
+        x.beginPath(); x.ellipse(cx, cy, R * 1.7, R * 0.5, -0.42, 0, 7); x.stroke();
+        x.strokeStyle = `rgba(255,255,255,.22)`;
+        x.lineWidth = 2;
+        x.beginPath(); x.ellipse(cx, cy, R * 1.95, R * 0.58, -0.42, 0, 7); x.stroke();
+      }
+      return new THREE.CanvasTexture(c);
+    }
+    const planets: Array<{ m: THREE.Sprite; depth: number; bob: number }> = [];
+    const planetDefs: Array<[[number, number, number], boolean, number, [number, number, number], number]> = [
+      // [tint, ringed, size, position, seed]
+      [[122, 60, 240], false, 30, [-78, 14, -55], 5],
+      [[46, 197, 255], true, 46, [72, -46, -80], 9],
+      [[217, 75, 160], false, 20, [38, 64, -95], 13],
+    ];
+    for (const [tint, ring, size, [px, py, pz], seed] of planetDefs) {
+      const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: planetTex(tint, ring, seed), transparent: true, depthWrite: false }));
+      m.position.set(px, py, pz);
+      m.scale.set(size, size, 1);
+      scene.add(m);
+      planets.push({ m, depth: 0.4 + Math.random() * 0.5, bob: Math.random() * 7 });
+    }
+    /* asteroid stream — small tumbling rocks drifting across the deep field */
+    function rockTex(seed: number): THREE.CanvasTexture {
+      const S = 64, c = document.createElement("canvas");
+      c.width = c.height = S;
+      const x = c.getContext("2d")!;
+      let s = seed;
+      const rnd = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+      x.fillStyle = "rgba(140,132,120,1)";
+      x.beginPath();
+      for (let i = 0; i <= 9; i++) {
+        const a = (i / 9) * Math.PI * 2;
+        const r = S * (0.24 + rnd() * 0.14);
+        const px = S / 2 + Math.cos(a) * r, py = S / 2 + Math.sin(a) * r;
+        i ? x.lineTo(px, py) : x.moveTo(px, py);
+      }
+      x.closePath(); x.fill();
+      x.fillStyle = "rgba(0,0,0,.35)";
+      for (let i = 0; i < 5; i++) {
+        x.beginPath(); x.arc(S * (0.3 + rnd() * 0.4), S * (0.3 + rnd() * 0.4), 2 + rnd() * 4, 0, 7); x.fill();
+      }
+      return new THREE.CanvasTexture(c);
+    }
+    const rocks: Array<{ m: THREE.Sprite; v: number; rs: number }> = [];
+    for (let i = 0; i < 9; i++) {
+      const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: rockTex(31 + i * 7), transparent: true, opacity: 0.85, depthWrite: false, rotation: Math.random() * 7 }));
+      m.position.set((Math.random() - 0.5) * 300, (Math.random() - 0.5) * 120, -30 - Math.random() * 70);
+      const s = 1.2 + Math.random() * 2.4;
+      m.scale.set(s, s, 1);
+      scene.add(m);
+      rocks.push({ m, v: 2 + Math.random() * 4, rs: (Math.random() - 0.5) * 0.6 });
+    }
+
     // occasional comet
     interface Comet { m: THREE.Sprite; v: THREE.Vector3; life: number }
     let comet: Comet | null = null;
@@ -380,6 +513,17 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
         n.material.opacity = .3 + Math.sin(t * .2 + i) * .09;
         n.position.y += Math.sin(t * .1 + i * 2) * .01;
       });
+      // planets bob gently and ride the scroll at their own depths
+      planets.forEach((p, i) => {
+        p.m.position.y += (Math.sin(t * 0.14 + p.bob) * 0.012);
+        p.m.position.x += ((-mouse.x * 4 * p.depth) - (p.m.position.x - planetDefs[i]![3][0])) * 0.02;
+      });
+      // asteroids tumble slowly across the field, wrapping at the edges
+      for (const r of rocks) {
+        r.m.position.x += r.v * dt;
+        r.m.material.rotation += r.rs * dt;
+        if (r.m.position.x > 165) r.m.position.x = -165;
+      }
       if (!reduced && performance.now() > nextComet && !comet) comet = spawnComet();
       if (comet) {
         comet.life += dt;

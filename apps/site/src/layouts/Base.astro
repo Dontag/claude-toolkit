@@ -32,22 +32,32 @@ const path = Astro.url.pathname;
     html{scroll-behavior:smooth}
     body{
       color:var(--text);font:16px/1.6 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
-      background:radial-gradient(120% 90% at 50% 0%,var(--bg2) 0%,var(--bg1) 45%,var(--bg0) 100%);
+      background:
+        radial-gradient(60% 45% at 18% 12%,rgba(122,60,240,.20) 0%,transparent 70%),
+        radial-gradient(50% 40% at 85% 30%,rgba(217,75,208,.12) 0%,transparent 70%),
+        radial-gradient(55% 50% at 60% 90%,rgba(46,110,224,.10) 0%,transparent 70%),
+        radial-gradient(120% 90% at 50% 0%,var(--bg1) 0%,#05030f 60%,var(--bg0) 100%);
       background-attachment:fixed;min-height:100vh;
     }
     a{color:var(--brand2);text-decoration:none}
     a:hover{text-decoration:underline}
     .wrap{max-width:1040px;margin:0 auto;padding:0 24px}
-    header.site{position:sticky;top:0;z-index:10;backdrop-filter:blur(14px);
-      background:rgba(5,7,15,.6);border-bottom:1px solid var(--border)}
-    header.site .wrap{display:flex;align-items:center;gap:22px;height:60px}
-    .logo{font-weight:700;letter-spacing:-.02em;color:var(--text);font-size:17px}
+    /* floating glowing capsule nav — matches the landing page */
+    header.site{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:10;
+      width:max-content;max-width:calc(100vw - 20px);border-radius:999px;
+      border:1px solid rgba(143,131,255,.4);background:rgba(8,10,25,.55);backdrop-filter:blur(14px);
+      box-shadow:0 0 26px rgba(143,131,255,.22),inset 0 0 20px rgba(122,60,240,.12);
+      animation:nav-glow 4.5s ease-in-out infinite}
+    header.site .wrap{display:flex;align-items:center;gap:14px;padding:10px 12px 10px 22px;max-width:none}
+    .logo{font-weight:700;letter-spacing:-.02em;color:var(--text);font-size:16px;white-space:nowrap}
     .logo:hover{text-decoration:none}
-    nav.main{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
-    nav.main a{color:var(--muted);font-size:13.5px;padding:7px 12px;border-radius:9px;transition:all .15s}
-    nav.main a:hover{color:var(--text);background:rgba(143,131,255,.1);text-decoration:none}
-    nav.main a.active{color:var(--text);background:rgba(143,131,255,.16)}
-    main{padding:48px 0 80px}
+    nav.main{display:flex;gap:2px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+    nav.main a{color:var(--muted);font-size:13px;padding:6px 12px;border-radius:99px;transition:all .15s;white-space:nowrap}
+    nav.main a:hover{color:var(--text);background:rgba(143,131,255,.16);text-decoration:none}
+    nav.main a.active{color:var(--text);background:rgba(143,131,255,.22)}
+    @keyframes nav-glow{0%,100%{box-shadow:0 0 20px rgba(143,131,255,.2),inset 0 0 20px rgba(122,60,240,.1)}
+      50%{box-shadow:0 0 38px rgba(124,231,245,.3),inset 0 0 24px rgba(122,60,240,.18)}}
+    main{padding:110px 0 80px}
     h1{font-size:clamp(28px,5vw,44px);letter-spacing:-.03em;line-height:1.15}
     h2{font-size:22px;letter-spacing:-.02em;margin:40px 0 14px}
     p.lead{color:var(--muted);font-size:18px;max-width:640px}
@@ -59,8 +69,11 @@ const path = Astro.url.pathname;
     .grid{display:grid;gap:14px}
     .badge{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
       padding:3px 9px;border-radius:99px;border:1px solid var(--border)}
-    footer.site{border-top:1px solid var(--border);padding:26px 0;color:var(--muted);font-size:13px}
-    .stars{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.5;
+    footer.site{padding:0 0 26px;color:var(--muted);font-size:13px}
+    footer.site::before{content:"";display:block;height:1px;margin-bottom:26px;
+      background:linear-gradient(90deg,transparent,rgba(143,131,255,.55),rgba(124,231,245,.45),transparent)}
+    footer.site .wrap{display:flex;gap:12px;flex-wrap:wrap;justify-content:space-between}
+    .stars{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.6;
       background-image:
         radial-gradient(1px 1px at 12% 22%,#fff8 0,transparent 100%),
         radial-gradient(1px 1px at 68% 12%,#fff6 0,transparent 100%),
@@ -68,9 +81,14 @@ const path = Astro.url.pathname;
         radial-gradient(1px 1px at 32% 66%,#fff5 0,transparent 100%),
         radial-gradient(1.5px 1.5px at 52% 88%,#7ce7f588 0,transparent 100%),
         radial-gradient(1px 1px at 92% 78%,#fff7 0,transparent 100%),
+        radial-gradient(2px 2px at 44% 34%,#d94bd066 0,transparent 100%),
+        radial-gradient(1px 1px at 22% 48%,#fff6 0,transparent 100%),
+        radial-gradient(1.5px 1.5px at 76% 64%,#8f83ff77 0,transparent 100%),
         radial-gradient(1px 1px at 8% 92%,#fff5 0,transparent 100%);
-    }
-    @media (max-width:640px){ header.site .wrap{height:auto;padding:10px 16px;flex-wrap:wrap} }
+      animation:twinkle 6s ease-in-out infinite}
+    @keyframes twinkle{0%,100%{opacity:.6}50%{opacity:.4}}
+    @media (prefers-reduced-motion: reduce){header.site,.stars{animation:none}}
+    @media (max-width:640px){ header.site .wrap{padding:8px 10px 8px 16px} nav.main a{padding:5px 9px} }
   </style>
 </head>
 <body>
@@ -88,7 +106,8 @@ const path = Astro.url.pathname;
   </main>
   <footer class="site">
     <div class="wrap">
-      Open source · <a href="https://github.com/Dontag/claude-toolkit">GitHub</a> · Built with Claude Code
+      <span>© 2026 Claude Galaxy · Crafted by Nishad Patil</span>
+      <span>Open source · <a href="https://github.com/Dontag/claude-toolkit">GitHub</a> · Built with Claude Code</span>
     </div>
   </footer>
 </body>
