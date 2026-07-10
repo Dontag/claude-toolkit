@@ -61,7 +61,20 @@ binds to your real `~/.claude` folder (or shows demo data with a "Set up
   - Homepage URL: `https://dontag.github.io/claude-toolkit`
   - Authorization callback URL: `https://<your-ref>.supabase.co/auth/v1/callback` (copy from the Supabase GitHub provider page)
   - paste Client ID + secret into Supabase → GitHub → enable.
-- **Authentication → URL Configuration → Redirect URLs** → add `claude-toolkit://auth-callback`.
+- **Authentication → URL Configuration → Redirect URLs** → add **both**:
+  - `claude-toolkit://auth-callback` (desktop deep link)
+  - `https://dontag.github.io/claude-toolkit/app/` (the web/Galaxy-only build)
+- For the web app's GitHub OAuth to return correctly, also make sure the GitHub
+  OAuth app's callback stays the Supabase one (`…/auth/v1/callback`) — Supabase
+  redirects on to whichever site URL initiated it.
+
+### Web (Galaxy-only) build
+The same app runs in a browser with Personal Space hidden. CI builds it via
+`pnpm --filter @claude-toolkit/desktop build:web` and mounts it at
+`/claude-toolkit/app/`. It reads Supabase creds from the repo **Variables**
+`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (Settings → Secrets and variables
+→ Actions → Variables). Run locally with `pnpm --filter @claude-toolkit/desktop dev`
+in a browser at `http://localhost:1420`.
 
 ### 3c. Extensions (Phase 3)
 - **Database → Extensions → enable `pg_cron`**. The migration auto-schedules the
