@@ -10,12 +10,13 @@ const typeColors: Record<string, string> = {
 const tokens = inv.changelog.reduce((s, e) => s + (e.tokensSaved || 0), 0);
 ---
 <Base title="Changelog — Claude Galaxy">
+  <div style="max-width:760px;margin:0 auto">
   <h1>Changelog</h1>
   <p class="lead" style="margin-top:10px">
     Every change, auto-logged. Estimated tokens saved by toolkit discipline so far:
     <strong style="color:var(--brand2)">{tokens.toLocaleString()}</strong>
   </p>
-  <div class="grid" style="margin-top:26px;max-width:720px">
+  <div class="grid" style="margin-top:26px">
     {inv.changelog.map((e) => (
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
@@ -27,5 +28,6 @@ const tokens = inv.changelog.reduce((s, e) => s + (e.tokensSaved || 0), 0);
         {e.tokensSaved > 0 && <div style="color:var(--brand2);font-size:12.5px;margin-top:6px">≈ {e.tokensSaved.toLocaleString()} tokens saved</div>}
       </div>
     ))}
+  </div>
   </div>
 </Base>

@@ -54,9 +54,15 @@ const isActive = (href: string) => path === href || path === `${href}/`;
       -webkit-mask:linear-gradient(#fff 0 0) padding-box,linear-gradient(#fff 0 0);
       -webkit-mask-composite:xor;mask-composite:exclude}
     header.site .wrap{display:flex;align-items:center;gap:10px;padding:8px 10px 8px 16px;max-width:none}
-    .logo{display:flex;align-items:center;gap:8px;font-weight:800;letter-spacing:-.02em;color:var(--text);font-size:16px;white-space:nowrap;padding-right:4px}
-    .logo img{width:26px;height:26px;filter:drop-shadow(0 0 8px rgba(143,131,255,.6))}
-    .logo:hover{text-decoration:none}
+    /* on subpages the logo gently pulses as a "click to go home" cue */
+    .logo{display:flex;align-items:center;gap:8px;font-weight:800;letter-spacing:-.02em;color:var(--text);font-size:16px;white-space:nowrap;padding-right:4px;
+      animation:logo-hint 2.6s ease-in-out infinite}
+    .logo img{width:26px;height:26px;filter:drop-shadow(0 0 8px rgba(143,131,255,.6));animation:logo-mark 2.6s ease-in-out infinite}
+    .logo:hover{text-decoration:none;animation:none}
+    .logo:hover img{animation:none;filter:drop-shadow(0 0 14px rgba(124,231,245,.95))}
+    @keyframes logo-hint{0%,100%{opacity:.82}50%{opacity:1}}
+    @keyframes logo-mark{0%,100%{filter:drop-shadow(0 0 6px rgba(143,131,255,.5)) brightness(1);transform:scale(1)}
+      50%{filter:drop-shadow(0 0 15px rgba(124,231,245,.9)) brightness(1.15);transform:scale(1.08)}}
     nav.main{display:flex;gap:2px;margin-left:auto;align-items:center}
     nav.main a{position:relative;color:#aab2d4;font-size:13px;font-weight:500;padding:7px 13px;border-radius:99px;transition:.18s;white-space:nowrap}
     nav.main a::after{content:"";position:absolute;left:13px;right:13px;bottom:4px;height:1.5px;border-radius:2px;
@@ -110,7 +116,7 @@ const isActive = (href: string) => path === href || path === `${href}/`;
         radial-gradient(1px 1px at 8% 92%,#fff5 0,transparent 100%);
       animation:twinkle 6s ease-in-out infinite}
     @keyframes twinkle{0%,100%{opacity:.6}50%{opacity:.4}}
-    @media (prefers-reduced-motion: reduce){header.site,.stars{animation:none}}
+    @media (prefers-reduced-motion: reduce){header.site,.stars,.logo,.logo img{animation:none}}
     @media (max-width:560px){
       header.site .wrap{gap:6px;padding:7px 8px 7px 12px}
       .logo img{width:22px;height:22px}
@@ -127,7 +133,7 @@ const isActive = (href: string) => path === href || path === `${href}/`;
       <a class="logo" href={`${base}/`}><img src={`${base}/logo.svg`} alt="" />Claude&nbsp;Galaxy</a>
       <nav class="main">
         {links.map((n) => <a href={n.href} class={isActive(n.href) ? "active" : ""}>{n.label}</a>)}
-        <a class="nav-github" href="https://github.com/Dontag/claude-toolkit" aria-label="GitHub">GitHub ↗</a>
+        <a class="nav-github" href="https://github.com/Dontag/claude-toolkit" target="_blank" rel="noopener noreferrer" aria-label="GitHub">GitHub ↗</a>
         <a href={`${base}/download`} class:list={["cta", { active: isActive(`${base}/download`) }]}>Download</a>
       </nav>
     </div>
@@ -140,7 +146,7 @@ const isActive = (href: string) => path === href || path === `${href}/`;
   <footer class="site">
     <div class="wrap">
       <span>© 2026 Claude Galaxy · Crafted by Nishad Patil</span>
-      <span>Open source · <a href="https://github.com/Dontag/claude-toolkit">GitHub</a> · Built with Claude Code</span>
+      <span>Open source · <a href="https://github.com/Dontag/claude-toolkit" target="_blank" rel="noopener noreferrer">GitHub</a> · Built with Claude Code</span>
     </div>
   </footer>
 </body>
