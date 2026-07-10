@@ -44,7 +44,8 @@ export function ConfigPanel({ onClose }: { onClose: () => void }) {
     <Modal
       onClose={onClose}
       label="Configuration"
-      panelClassName="hud-panel max-h-[calc(100vh-4rem)] w-full max-w-md overflow-y-auto p-5"
+      backdropClassName="fixed inset-0 z-[100] flex items-start justify-end bg-black/50 px-3 pt-14 backdrop-blur-sm"
+      panelClassName="hud-panel max-h-[calc(100vh-4.5rem)] w-full max-w-md overflow-y-auto p-5"
     >
         <div className="mb-2 flex items-center justify-between">
           <span className="hud-label">⚙ Configuration</span>

@@ -199,11 +199,13 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-transparent text-text">
-      <header className="z-30 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-black/30 px-3 backdrop-blur-xl">
+      {/* overflow-x-auto: on narrow phones every control stays reachable by
+          swiping the bar instead of silently clipping off-screen */}
+      <header className="z-30 flex h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-black/30 px-3 backdrop-blur-xl [scrollbar-width:none]">
         {/* left: brand + tabs */}
         <img src={LOGO} alt="" className="h-6 w-6 shrink-0" />
         <span className="hidden text-sm font-bold tracking-tight sm:inline">Claude Galaxy</span>
-        <nav className="ml-1 flex gap-1">
+        <nav className="ml-1 flex shrink-0 gap-1">
           {!IS_WEB && <TabButton id="personal" label="🌱 Personal" />}
           <TabButton id="galaxy" label="🌌 Galaxy" />
         </nav>

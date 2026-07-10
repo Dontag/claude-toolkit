@@ -624,6 +624,7 @@ export class SkillTreeScene {
 
   /* ── Input ── */
   private bindInput(el: HTMLElement) {
+    el.style.touchAction = "none"; // we own pinch + drag; stop browser pan/zoom
     const ptrs = new Map<number, [number, number]>();
     let pinchDist = 0;
     const ROT = 0.006;

@@ -339,6 +339,9 @@ export class GalaxyScene {
   private freeNav = false;
   private center = new THREE.Vector3();
   private panTarget = new THREE.Vector3();
+  // zoom-out ceiling; setItems raises it (and the camera far plane) as the
+  // galaxy grows so a crowded universe can always be framed in one view
+  private maxDist = 220;
   private blackHole = new THREE.Group();
   private doppler?: THREE.Sprite;
   private accretionTexes: THREE.Texture[] = [];
@@ -697,24 +700,21 @@ export class GalaxyScene {
         const size = Math.max(0.22, 0.36 - kindItems.length * 0.012);
         kindItems.forEach((item, j) => {
           const angle = (j / kindItems.length) * Math.PI * 2 + lane * 0.7;
-          // stable per-item seed → ~65% of bodies get a detailed nebula-lit
-          // surface (ref image 2); the rest stay as clean glowing orbs
+          // stable per-item seed → every body gets a nebula-lit surface
+          // (ref image 2); the seed varies the veins so no two look alike
           let hseed = 0;
           for (let k = 0; k < item.id.length; k++) hseed = (hseed * 31 + item.id.charCodeAt(k)) >>> 0;
-          const detailed = hseed % 100 < 65;
           const mat = new THREE.MeshStandardMaterial({
-            color: detailed ? 0xffffff : kc,
+            color: 0xffffff,
             emissive: kc,
-            emissiveIntensity: detailed ? 0.9 : 0.5,
+            emissiveIntensity: 0.9,
             roughness: 0.55,
             metalness: 0.1,
           });
-          if (detailed) {
-            const tex = planetTextures(kc, hseed || ++seedCounter);
-            mat.map = tex.map;
-            mat.emissiveMap = tex.emissive;
-            this.planetTexes.push(tex.map, tex.emissive);
-          }
+          const tex = planetTextures(kc, hseed || ++seedCounter);
+          mat.map = tex.map;
+          mat.emissiveMap = tex.emissive;
+          this.planetTexes.push(tex.map, tex.emissive);
           const planet = new THREE.Mesh(new THREE.SphereGeometry(size, 24, 18), mat);
           planet.rotation.y = (hseed % 628) / 100;
           planet.userData.item = item;
@@ -742,8 +742,18 @@ export class GalaxyScene {
     // remember what exists now so the next update only grows in truly-new things
     this.knownOwners = new Set(owners.keys());
     this.knownItems = new Set(items.map((i) => i.id));
+    // scale the camera to the placed galaxy: the outermost system (collision
+    // nudging can push past the seeded reach) sets the zoom ceiling and the
+    // far plane, so hundreds of users still fit in one framed view
+    let maxR = 0;
+    for (const p of positions.values()) maxR = Math.max(maxR, Math.hypot(p.x, p.z));
+    this.maxDist = Math.max(220, maxR * 2.4 + 40);
+    if (this.camera && this.camera.far < this.maxDist * 1.4) {
+      this.camera.far = this.maxDist * 1.4;
+      this.camera.updateProjectionMatrix();
+    }
     // frame the whole galaxy as it expands (unless the user is navigating freely)
-    if (!this.freeNav) this.targetDist = Math.max(24, 22 + Math.sqrt(n) * 10);
+    if (!this.freeNav) this.targetDist = Math.min(this.maxDist, Math.max(24, maxR * 1.9 + 16));
   }
 
   /** Sparse interstellar dust drifting through the whole system field. */
@@ -942,18 +952,36 @@ export class GalaxyScene {
   }
 
   private bindInput(el: HTMLElement) {
+    el.style.touchAction = "none"; // we own pinch + drag; stop browser pan/zoom
+    const ptrs = new Map<number, [number, number]>();
+    let pinchDist = 0;
     let panning = false;
     const onDown = (e: PointerEvent) => {
+      ptrs.set(e.pointerId, [e.clientX, e.clientY]);
       // Free flight: plain drag PANS (move freely in X/Y), Shift/right-drag
       // rotates the view. Locked: plain drag orbits the centre.
       const rotateMod = e.button === 2 || e.shiftKey;
       panning = this.freeNav && !rotateMod;
-      this.dragging = !panning;
+      if (ptrs.size === 2) {
+        // second finger down → pinch zoom, cancel the drag
+        const [a, b] = [...ptrs.values()];
+        pinchDist = Math.hypot(a![0] - b![0], a![1] - b![1]);
+        this.dragging = false;
+        panning = false;
+      } else this.dragging = !panning;
       this.lastX = this.downX = e.clientX;
       this.lastY = this.downY = e.clientY;
     };
     const onMove = (e: PointerEvent) => {
-      if (panning) {
+      if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+      if (ptrs.size === 2) {
+        const [a, b] = [...ptrs.values()];
+        const d = Math.hypot(a![0] - b![0], a![1] - b![1]);
+        if (pinchDist > 0 && d > 0) {
+          this.targetDist = Math.min(this.maxDist, Math.max(5, this.targetDist * (pinchDist / d)));
+        }
+        pinchDist = d;
+      } else if (panning) {
         // move the focus point across the view plane
         const dx = (e.clientX - this.lastX) * this.dist * 0.0015;
         const dy = (e.clientY - this.lastY) * this.dist * 0.0015;
@@ -972,13 +1000,18 @@ export class GalaxyScene {
       this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     };
-    const onUp = () => {
-      this.dragging = false;
-      panning = false;
+    const onUp = (e: PointerEvent) => {
+      ptrs.delete(e.pointerId);
+      if (ptrs.size < 2) pinchDist = 0;
+      if (!ptrs.size) {
+        this.dragging = false;
+        panning = false;
+      }
     };
     const onContext = (e: Event) => this.freeNav && e.preventDefault(); // allow right-drag pan
     const onWheel = (e: WheelEvent) => {
-      this.targetDist = Math.min(220, Math.max(5, this.targetDist + e.deltaY * 0.04));
+      // maxDist grows with the galaxy so a crowded universe can still be framed
+      this.targetDist = Math.min(this.maxDist, Math.max(5, this.targetDist + e.deltaY * 0.04));
     };
     const onClick = (e: MouseEvent) => {
       if (Math.abs(e.clientX - this.downX) > 4 || Math.abs(e.clientY - this.downY) > 4) return;
@@ -995,6 +1028,7 @@ export class GalaxyScene {
     el.addEventListener("pointerdown", onDown);
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     el.addEventListener("wheel", onWheel, { passive: true });
     el.addEventListener("click", onClick);
     el.addEventListener("contextmenu", onContext);
@@ -1004,6 +1038,7 @@ export class GalaxyScene {
       el.removeEventListener("pointerdown", onDown);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
       el.removeEventListener("wheel", onWheel);
       el.removeEventListener("click", onClick);
       el.removeEventListener("contextmenu", onContext);

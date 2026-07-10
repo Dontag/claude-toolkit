@@ -32,7 +32,10 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_persisted_scope::init())
         .setup(|app| {
-            // Dev builds: open devtools automatically (WebView context menu is off)
+            // Dev builds only: open devtools automatically. In release the
+            // inspector is not compiled in at all (the `tauri` crate's
+            // `devtools` feature is off in Cargo.toml and this call is gated
+            // out), so production ships with no devtools / F12 / Inspect.
             #[cfg(debug_assertions)]
             if let Some(win) = app.get_webview_window("main") {
                 win.open_devtools();
@@ -47,12 +50,12 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 // Tray: hide-to-tray keeps the ~/.claude watcher alive in the background
-                let show = MenuItem::with_id(app, "show", "Show Claude Toolkit", true, None::<&str>)?;
+                let show = MenuItem::with_id(app, "show", "Show Claude Galaxy", true, None::<&str>)?;
                 let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
                 let menu = Menu::with_items(app, &[&show, &quit])?;
                 TrayIconBuilder::with_id("main-tray")
                     .icon(app.default_window_icon().unwrap().clone())
-                    .tooltip("Claude Toolkit — watching your .claude folder")
+                    .tooltip("Claude Galaxy — watching your .claude folder")
                     .menu(&menu)
                     .show_menu_on_left_click(true)
                     .on_menu_event(|app, event| match event.id.as_ref() {

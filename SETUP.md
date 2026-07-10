@@ -1,7 +1,9 @@
-# Claude Toolkit — Setup Guide
+# Claude Galaxy — Setup Guide
 
 Everything you need to run the desktop app, enable the Galaxy backend, and cut a release.
 Steps marked **✅ done** are already configured; **▶ you** need action.
+For the full production-build reference (per-OS outputs, signing, checklist) see
+[DEV.md §8](DEV.md#8-build-production-installers-exe--dmg--appimage).
 
 ---
 
@@ -66,11 +68,26 @@ Supabase → **Authentication → URL Configuration → Redirect URLs** → **Ad
 ### ✅ done
 - GitHub Pages set to deploy from Actions; the marketing/download site auto-builds on every push.
 - Updater signing keypair generated; `TAURI_SIGNING_PRIVATE_KEY` secret set on the repo; public key embedded in `tauri.conf.json`.
+- Release builds ship **without DevTools** (compiled out, not just hidden).
 
-### ▶ you
-1. **Back up the signing key** — copy `C:\Users\<you>\.tauri\claude-toolkit.key` (and remember it has no password) somewhere safe. If lost, existing installs can never auto-update again.
-2. **Cut a release**: `git tag app-v0.1.0 && git push --tags`. CI builds Windows/macOS/Linux installers, publishes a GitHub Release, and the download page fills in automatically.
-3. **(Later) OS code signing** — until you buy a Windows cert (~$100+/yr) and/or Apple Developer ($99/yr), users click through SmartScreen/Gatekeeper warnings (documented on the download page). The release workflow has placeholders ready.
+### ▶ you — the 3-command production release
+Builds Windows `.exe`/`.msi`, macOS `.dmg` (Apple Silicon + Intel), and Linux
+`.AppImage`/`.deb` on GitHub's runners — no need for three machines:
+```bash
+# 1. bump "version" in apps/desktop/src-tauri/tauri.conf.json (e.g. 0.1.0 → 0.1.1)
+git commit -am "chore: release v0.1.1"
+# 2. tag it (the app-v* tag is what triggers the build)
+git tag app-v0.1.1
+# 3. push
+git push origin main --tags
+```
+Watch **Actions → Desktop release**; ~10–15 min later a GitHub Release appears
+with all installers + `latest.json`, and the site's Download page auto-fills.
+To build a single platform locally instead, see [DEV.md §8a](DEV.md#8a-build-on-your-own-machine-fastest-for-one-platform).
+
+### ▶ you — one-time safety + polish
+1. **Back up the signing key** — copy `C:\Users\<you>\.tauri\claude-toolkit.key` (it has no password) somewhere safe. If lost, existing installs can never auto-update again.
+2. **(Later) OS code signing** — until you buy a Windows cert (~$100+/yr) and/or Apple Developer ($99/yr), users click through SmartScreen/Gatekeeper warnings (documented on the download page). The release workflow has placeholders ready.
 
 ---
 

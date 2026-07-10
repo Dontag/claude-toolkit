@@ -1,4 +1,4 @@
-# DEV.md — run, configure, and develop Claude Toolkit
+# DEV.md — run, configure, and develop Claude Galaxy
 
 Step-by-step for running the desktop app locally, wiring the backend, and the
 feature flags. Companion to [SETUP.md](SETUP.md) (which is the shorter "turn it
@@ -119,7 +119,7 @@ and skip this. When you're ready:
 2. Set secrets + deploy the edge function:
    ```bash
    supabase secrets set RESEND_API_KEY=re_xxx
-   supabase secrets set EMAIL_FROM="Claude Toolkit <noreply@yourdomain>"
+   supabase secrets set EMAIL_FROM="Claude Galaxy <noreply@yourdomain>"
    supabase functions deploy notify-email
    ```
 3. Fire it on new pending proposals — Supabase → **Database → Webhooks → Create**:
@@ -166,14 +166,86 @@ docker stop pg
 
 ---
 
-## 8. Build & release
+## 8. Build production installers (.exe / .dmg / .AppImage)
+
+Production builds are **release** builds: optimized (`lto`, `strip`), and with
+**no DevTools compiled in** — the inspector, F12, and right-click *Inspect* are
+all gone (the `open_devtools()` call is `#[cfg(debug_assertions)]`-gated and the
+`tauri` crate's `devtools` feature is off in `Cargo.toml`). Closing the window
+hides to the tray instead of exiting, so the `~/.claude` watcher keeps running.
+
+### 8a. Build on your own machine (fastest for one platform)
+
+Each OS's installer must be built **on that OS** (Tauri can't cross-compile the
+webview). On this Windows machine:
+
+```powershell
+cd apps\desktop
+$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"   # if cargo isn't found
+$env:RUST_MIN_STACK = "33554432"                       # this machine needs it
+# Optional: sign the updater artifacts (see 8c). Without these two vars the
+# build still succeeds; it just won't emit .sig files / latest.json.
+$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content "$env:USERPROFILE\.tauri\claude-toolkit.key" -Raw
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""            # this key has no password
+pnpm tauri build
+```
+
+Artifacts land in `apps/desktop/src-tauri/target/release/bundle/`:
+
+| OS | Build on | Output (under `bundle/`) |
+|---|---|---|
+| **Windows** | Windows | `msi/Claude Galaxy_<ver>_x64_en-US.msi` and `nsis/Claude Galaxy_<ver>_x64-setup.exe` |
+| **macOS** | macOS | `dmg/Claude Galaxy_<ver>_<arch>.dmg` and `macos/Claude Galaxy.app` |
+| **Linux** | Linux | `appimage/Claude Galaxy_<ver>_amd64.AppImage` and `deb/…_amd64.deb` |
+
+macOS notes: build `--target aarch64-apple-darwin` (Apple Silicon) and
+`--target x86_64-apple-darwin` (Intel) separately, or `universal-apple-darwin`
+for a fat binary. Linux needs `libwebkit2gtk-4.1-dev libappindicator3-dev
+librsvg2-dev patchelf` (see the CI workflow for the exact apt list).
+
+Just the frontend bundle (no installer): `pnpm --filter @claude-toolkit/desktop build`.
+
+### 8b. Build all three platforms at once (recommended — via CI)
+
+You don't need three machines. The [`desktop-release.yml`](.github/workflows/desktop-release.yml)
+workflow builds Windows + macOS (arm64 & Intel) + Linux on GitHub's runners and
+publishes a **GitHub Release** with all installers and the updater `latest.json`:
 
 ```bash
-pnpm --filter @claude-toolkit/desktop build      # frontend bundle
-git tag app-v0.1.0 && git push --tags            # CI builds installers for win/mac/linux
+# bump the version in apps/desktop/src-tauri/tauri.conf.json first (e.g. 0.1.0 → 0.1.1)
+git commit -am "chore: release v0.1.1"
+git tag app-v0.1.1
+git push origin main --tags        # the tag push triggers the build
 ```
-The site's download page fills in automatically from the GitHub Release. Back up
-`~/.tauri/claude-toolkit.key` — losing it breaks auto-updates for installed apps.
+
+Watch it under the repo's **Actions** tab; ~10–15 min later the Release appears
+and the site's **Download** page fills in automatically from it. You can also run
+it manually from **Actions → Desktop release → Run workflow** (workflow_dispatch).
+
+### 8c. Signing — two independent things
+
+1. **Updater signing (already set up).** Ensures the auto-updater only installs
+   artifacts you signed. The keypair exists; the public key is embedded in
+   `tauri.conf.json`, and the private key is the repo secret
+   `TAURI_SIGNING_PRIVATE_KEY` (CI uses it automatically). **Back up
+   `~/.tauri/claude-toolkit.key`** — if lost, every installed app can *never
+   auto-update again*.
+2. **OS code signing (not set up — optional).** Without an Apple Developer cert
+   ($99/yr) or a Windows Authenticode cert (~$100+/yr), installers are unsigned,
+   so first launch shows **Windows SmartScreen** ("More info → Run anyway") or
+   **macOS Gatekeeper** (right-click → Open). This is expected and documented on
+   the download page. When you buy certs, uncomment the `APPLE_CERTIFICATE` /
+   `WINDOWS_CERTIFICATE` env in `desktop-release.yml`.
+
+### 8d. Pre-release checklist
+
+- [ ] `pnpm --filter @claude-toolkit/desktop typecheck` and `… test` pass.
+- [ ] Version bumped in `apps/desktop/src-tauri/tauri.conf.json` (drives the tag).
+- [ ] `apps/desktop/.env` is **not** required for a build — but the Galaxy only
+      works in the shipped app if `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`
+      were present at build time (CI reads them from repo **Variables**).
+- [ ] Signing key backed up (8c).
+- [ ] Smoke-test the built installer on a clean machine/VM before announcing.
 
 ---
 
