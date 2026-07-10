@@ -28,7 +28,7 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
     /* fixed 3D sky behind everything */
     #sky{position:fixed;inset:0;z-index:0}
     .veil{position:fixed;inset:0;z-index:1;pointer-events:none;
-      background:radial-gradient(120% 80% at 50% 10%,transparent 30%,rgba(5,3,15,.55) 75%,rgba(5,3,15,.92) 100%)}
+      background:radial-gradient(115% 78% at 50% 12%,transparent 20%,rgba(5,3,15,.5) 62%,rgba(5,3,15,.95) 100%)}
     /* nav — floating glowing capsule with an animated conic aura ring */
     nav{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:20;display:flex;align-items:center;gap:10px;
       width:max-content;max-width:calc(100vw - 20px);padding:8px 10px 8px 16px;border-radius:999px;
@@ -545,13 +545,25 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
       let s = seed;
       const rnd = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
       x.globalCompositeOperation = "lighter";
-      const tints = [[150,40,200],[200,50,170],[110,40,210],[210,90,230]];
-      for (let i = 0; i < 55; i++) {
-        const cx = rnd()*S, cy = rnd()*S, r = 22 + rnd()*85;
+      // deeper, more saturated tints + a sharper mid stop so the cloud reads
+      // as rich violet/magenta rather than a flat milky wash
+      const tints = [[120,24,215],[185,30,150],[80,20,205],[168,44,225]];
+      for (let i = 0; i < 42; i++) {
+        const cx = rnd()*S, cy = rnd()*S, r = 20 + rnd()*80;
         const [rr,gg,bb] = tints[(rnd()*tints.length)|0];
+        const a = 0.04 + rnd()*0.1;
         const g = x.createRadialGradient(cx,cy,0,cx,cy,r);
-        g.addColorStop(0, `rgba(${rr},${gg},${bb},${0.05+rnd()*0.11})`);
+        g.addColorStop(0, `rgba(${rr},${gg},${bb},${a})`);
+        g.addColorStop(0.45, `rgba(${rr},${gg},${bb},${a*0.35})`);
         g.addColorStop(1, "rgba(0,0,0,0)");
+        x.fillStyle = g; x.beginPath(); x.arc(cx,cy,r,0,7); x.fill();
+      }
+      // a few bright hot cores for contrast/detail
+      for (let i = 0; i < 6; i++) {
+        const cx = rnd()*S, cy = rnd()*S, r = 5 + rnd()*12;
+        const g = x.createRadialGradient(cx,cy,0,cx,cy,r);
+        g.addColorStop(0, `rgba(240,214,255,${0.12+rnd()*0.14})`);
+        g.addColorStop(1, "rgba(240,214,255,0)");
         x.fillStyle = g; x.beginPath(); x.arc(cx,cy,r,0,7); x.fill();
       }
       return new THREE.CanvasTexture(c);
@@ -581,9 +593,9 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
     // nebula billboards
     const nebulae: THREE.Sprite[] = [];
     const nTex = [nebulaTex(11), nebulaTex(22), nebulaTex(33)];
-    const nCol = [0xa64bff, 0xd94bd0, 0x7a3cf0, 0xff5ad0];
-    for (let i = 0; i < 9; i++) {
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: nTex[i % 3], color: nCol[i % 4], transparent: true, opacity: .34, blending: THREE.AdditiveBlending, depthWrite: false, rotation: Math.random()*7 }));
+    const nCol = [0x9a3cff, 0xc93cc0, 0x6a2ce8, 0xe84ac0];
+    for (let i = 0; i < 7; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: nTex[i % 3], color: nCol[i % 4], transparent: true, opacity: .22, blending: THREE.AdditiveBlending, depthWrite: false, rotation: Math.random()*7 }));
       sp.position.set((Math.random()-.5)*220, (Math.random()-.5)*130, -40 - Math.random()*60);
       const s = 120 + Math.random()*120;
       sp.scale.set(s, s*.72, 1);
@@ -605,23 +617,33 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
     const dgeo = new THREE.BufferGeometry();
     dgeo.setAttribute("position", new THREE.BufferAttribute(dpos, 3));
     dgeo.setAttribute("color", new THREE.BufferAttribute(dcol, 3));
-    const dust = new THREE.Points(dgeo, new THREE.PointsMaterial({ size:.42, map:glow, vertexColors:true, transparent:true, opacity:.5, depthWrite:false, blending:THREE.AdditiveBlending }));
+    const dust = new THREE.Points(dgeo, new THREE.PointsMaterial({ size:.34, map:glow, vertexColors:true, transparent:true, opacity:.28, depthWrite:false, blending:THREE.AdditiveBlending }));
     scene.add(dust);
 
     /* distant labelled solar systems — tiny star + orbiting planet + a name
        sprite, scattered far in the field so the galaxy feels inhabited */
     const SYS_NAMES = ["Kepler-9c","Vela","Cassia","Orion-B","Nyx","Lyra-4","Halcyon","Zephyr","Meridian","Astraeus","Caelum","Vesper"];
-    function labelTex(text: string): THREE.CanvasTexture {
-      const pad = 12, fs = 34;
-      const m = document.createElement("canvas").getContext("2d")!;
-      m.font = `600 ${fs}px Inter,system-ui,sans-serif`;
-      const w = Math.ceil(m.measureText(text).width) + pad*2;
-      const c = document.createElement("canvas"); c.width = w; c.height = fs + pad*2;
-      const x = c.getContext("2d")!;
-      x.font = `600 ${fs}px Inter,system-ui,sans-serif`;
-      x.fillStyle = "rgba(124,231,245,.9)"; x.textBaseline = "middle";
-      x.fillText(text, pad, c.height/2);
-      const t = new THREE.CanvasTexture(c); t.minFilter = THREE.LinearFilter; return t;
+    // crisp, letter-spaced "star catalog" label: a small diamond marker + the
+    // name in uppercase mono, rendered at 2x so it stays sharp when scaled
+    function labelTex(text: string): { tex: THREE.CanvasTexture; asp: number } {
+      const dpr = 2, fs = 30, pad = 8, ls = 4, markerW = 22;
+      const upper = text.toUpperCase();
+      const font = `500 ${fs}px ui-monospace, "SF Mono", Menlo, monospace`;
+      const meas = document.createElement("canvas").getContext("2d")!;
+      meas.font = font;
+      let tw = 0; for (const ch of upper) tw += meas.measureText(ch).width + ls;
+      const w = Math.ceil(markerW + tw) + pad*2, h = fs + pad*2;
+      const c = document.createElement("canvas"); c.width = w*dpr; c.height = h*dpr;
+      const x = c.getContext("2d")!; x.scale(dpr, dpr);
+      x.font = font; x.textBaseline = "middle";
+      const my = h/2;
+      x.fillStyle = "rgba(124,231,245,.75)";
+      x.beginPath(); x.moveTo(pad+6, my-5); x.lineTo(pad+11, my); x.lineTo(pad+6, my+5); x.lineTo(pad+1, my); x.closePath(); x.fill();
+      x.fillStyle = "rgba(208,220,244,.92)";
+      let tx = pad + markerW;
+      for (const ch of upper) { x.fillText(ch, tx, my); tx += x.measureText(ch).width + ls; }
+      const t = new THREE.CanvasTexture(c); t.minFilter = THREE.LinearFilter;
+      return { tex: t, asp: w / h };
     }
     interface Sys { star: THREE.Sprite; planet: THREE.Sprite; label: THREE.Sprite; r: number; a: number; sp: number; cx: number; cy: number; cz: number }
     const systems: Sys[] = [];
@@ -634,8 +656,9 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
       star.position.set(cx, cy, cz); const ss = 3 + Math.random()*3; star.scale.set(ss, ss, 1); scene.add(star);
       const planet = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0xcfe0ff, transparent:true, opacity:.8, blending:THREE.AdditiveBlending, depthWrite:false }));
       planet.scale.set(1.1, 1.1, 1); scene.add(planet);
-      const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex(name), transparent:true, opacity:.55, depthWrite:false }));
-      const lw = 9 + name.length*.55; label.scale.set(lw, lw*0.28, 1); label.position.set(cx, cy - ss - 2.5, cz); scene.add(label);
+      const lab = labelTex(name);
+      const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: lab.tex, transparent:true, opacity:.42, depthWrite:false }));
+      const lh = 2.1; label.scale.set(lh*lab.asp, lh, 1); label.position.set(cx, cy - ss - 2.2, cz); scene.add(label);
       systems.push({ star, planet, label, r: 4 + Math.random()*4, a: Math.random()*7, sp: .15 + Math.random()*.3, cx, cy, cz });
     }
 
@@ -767,7 +790,7 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
       });
       nebulae.forEach((n, i) => {
         n.material.rotation += dt * .012 * (i % 2 ? 1 : -1);
-        n.material.opacity = .3 + Math.sin(t * .2 + i) * .09;
+        n.material.opacity = .2 + Math.sin(t * .2 + i) * .06;
         n.position.y += Math.sin(t * .1 + i * 2) * .01;
       });
       // dust drifts slowly and parallaxes with the pointer
