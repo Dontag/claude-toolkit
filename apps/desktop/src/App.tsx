@@ -199,9 +199,11 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-transparent text-text">
-      {/* overflow-x-auto: on narrow phones every control stays reachable by
-          swiping the bar instead of silently clipping off-screen */}
-      <header className="z-30 flex h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-black/30 px-3 backdrop-blur-xl [scrollbar-width:none]">
+      {/* flex-wrap (not overflow scroll): on narrow phones the controls wrap
+          to a second row so every one stays reachable — and, crucially, the
+          header never becomes a clipping container, which would cut off the
+          notification/auth dropdowns that hang below it */}
+      <header className="z-30 flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-border bg-black/30 px-3 py-1.5 backdrop-blur-xl sm:h-12 sm:flex-nowrap sm:py-0">
         {/* left: brand + tabs */}
         <img src={LOGO} alt="" className="h-6 w-6 shrink-0" />
         <span className="hidden text-sm font-bold tracking-tight sm:inline">Claude Galaxy</span>
