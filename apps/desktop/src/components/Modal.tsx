@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { pushModal } from "../stores/modals";
 
 interface Props {
@@ -59,7 +60,11 @@ export function Modal({ onClose, label, panelClassName, backdropClassName, child
     }
   };
 
-  return (
+  // Portal to <body>: a header ancestor uses backdrop-blur, which creates a
+  // containing block for position:fixed — without the portal a modal spawned
+  // from the header would be trapped/clipped inside that 48px bar instead of
+  // covering the viewport.
+  return createPortal(
     <div
       className={backdropClassName ?? "fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"}
     >
@@ -74,7 +79,8 @@ export function Modal({ onClose, label, panelClassName, backdropClassName, child
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
