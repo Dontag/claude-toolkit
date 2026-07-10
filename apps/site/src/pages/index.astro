@@ -34,10 +34,10 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
       width:max-content;max-width:calc(100vw - 20px);padding:8px 10px 8px 16px;border-radius:999px;
       border:1px solid rgba(143,131,255,.35);background:rgba(8,10,25,.6);backdrop-filter:blur(16px) saturate(1.2);
       box-shadow:0 8px 40px rgba(5,3,15,.6),0 0 26px rgba(143,131,255,.18),inset 0 1px 0 rgba(255,255,255,.06)}
-    /* rotating gradient halo behind the capsule */
+    /* soft static aura behind the capsule (no rotation) */
     nav::before{content:"";position:absolute;inset:-2px;border-radius:999px;pointer-events:none;z-index:-1;
-      background:conic-gradient(from 0deg,#8f83ff,#d94bd0,#7ce7f5,#7a3cf0,#8f83ff);
-      filter:blur(9px);opacity:.45;animation:halo-spin 8s linear infinite}
+      background:linear-gradient(100deg,rgba(143,131,255,.4),rgba(217,75,208,.28),rgba(124,231,245,.4));
+      filter:blur(10px);opacity:.4}
     /* crisp gradient border on top */
     nav::after{content:"";position:absolute;inset:0;border-radius:999px;pointer-events:none;padding:1px;
       background:linear-gradient(100deg,rgba(143,131,255,.7),rgba(217,75,208,.5),rgba(124,231,245,.7));
@@ -82,13 +82,35 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
       transform:translateX(-120%);animation:sheen 3.6s ease-in-out infinite}
     .btn.primary:hover{box-shadow:0 12px 44px rgba(143,131,255,.45)}
     .btn.ghost:hover{border-color:#8f83ff;box-shadow:0 8px 30px rgba(143,131,255,.25)}
-    .scroll-hint{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;
-      align-items:center;gap:9px;color:#9aa3c7;font-size:10px;letter-spacing:.28em;text-transform:uppercase}
-    .mouse{width:26px;height:42px;border:1.5px solid rgba(154,163,199,.65);border-radius:14px;position:relative;
-      box-shadow:0 0 16px rgba(124,231,245,.18),inset 0 0 8px rgba(143,131,255,.12)}
-    .mouse i{position:absolute;left:50%;top:7px;width:4px;height:9px;margin-left:-2px;border-radius:3px;
-      background:linear-gradient(#7ce7f5,#8f83ff);animation:wheel 1.8s ease-in-out infinite}
-    @keyframes wheel{0%{transform:translateY(0);opacity:1}70%{transform:translateY(15px);opacity:0}100%{transform:translateY(0);opacity:0}}
+    .scroll-hint{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;
+      align-items:center;gap:8px;font-size:10px;letter-spacing:.3em;text-transform:uppercase}
+    .mouse{width:28px;height:46px;border-radius:16px;position:relative;
+      background:linear-gradient(rgba(143,131,255,.1),rgba(124,231,245,.05));
+      box-shadow:0 0 24px rgba(124,231,245,.2),inset 0 0 10px rgba(143,131,255,.14)}
+    .mouse::before{content:"";position:absolute;inset:0;border-radius:16px;padding:1.5px;pointer-events:none;
+      background:linear-gradient(180deg,#8f83ff,#7ce7f5);
+      -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+    .mouse i{position:absolute;left:50%;top:8px;width:5px;height:10px;margin-left:-2.5px;border-radius:4px;
+      background:linear-gradient(#fff,#7ce7f5);box-shadow:0 0 10px #7ce7f5;animation:wheel 1.8s cubic-bezier(.5,0,.5,1) infinite}
+    .scroll-hint .chev{width:9px;height:9px;border-right:2px solid rgba(124,231,245,.7);border-bottom:2px solid rgba(124,231,245,.7);
+      transform:rotate(45deg);animation:chev-bob 1.8s ease-in-out infinite}
+    .scroll-hint .txt{background:linear-gradient(90deg,#8f83ff,#7ce7f5);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700}
+    @keyframes wheel{0%{transform:translateY(0);opacity:1}70%{transform:translateY(16px);opacity:0}100%{transform:translateY(0);opacity:0}}
+    @keyframes chev-bob{0%,100%{transform:rotate(45deg) translate(0,0);opacity:.5}50%{transform:rotate(45deg) translate(3px,3px);opacity:1}}
+    /* custom planet cursor (fine-pointer devices only) */
+    #cursor{position:fixed;top:0;left:0;z-index:9999;pointer-events:none;display:none}
+    #cursor .planet{position:absolute;width:22px;height:22px;margin:-11px;border-radius:50%;
+      background:radial-gradient(circle at 34% 30%,#fff,#8f83ff 46%,#5a2fd0 100%);box-shadow:0 0 16px rgba(143,131,255,.7);
+      transition:transform .18s cubic-bezier(.16,1,.3,1)}
+    #cursor .ring{position:absolute;width:40px;height:40px;margin:-20px;border-radius:50%;border:1.5px solid transparent;
+      border-top-color:#7ce7f5;border-right-color:#d94bd0;animation:cur-spin 2.2s linear infinite;transition:transform .18s}
+    #cursor.hover .planet{transform:scale(1.55)}
+    #cursor.hover .ring{transform:scale(1.3)}
+    #cursor.down .planet{animation:cur-pop .45s ease}
+    @keyframes cur-spin{to{transform:rotate(360deg)}}
+    @keyframes cur-pop{0%{transform:scale(1)}35%{transform:scale(.6)}70%{transform:scale(1.4)}100%{transform:scale(1)}}
+    body.has-cursor,body.has-cursor a,body.has-cursor button,body.has-cursor input{cursor:none}
+    body.has-cursor #cursor{display:block}
     /* story sections */
     .story{padding:18vh 0}
     .kicker{font:600 11px/1 ui-monospace,monospace;letter-spacing:.22em;text-transform:uppercase;color:#7ce7f5;margin-bottom:14px}
@@ -198,13 +220,19 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
     @media (max-width:640px){
       .wrap{padding:0 18px}
       .ctas .btn{padding:13px 22px;font-size:14px}
-      .founder-card{padding:26px}
+    }
+    /* founder card: stack + centre everything on narrow screens */
+    @media (max-width:760px){
+      .founder-card{flex-direction:column;text-align:center;padding:30px 24px}
+      .founder-photo{margin:0 auto}
+      .founder blockquote{margin:0 auto}
     }
   </style>
 </head>
 <body>
   <canvas id="sky"></canvas>
   <div class="veil"></div>
+  <div id="cursor" aria-hidden="true"><span class="ring"></span><span class="planet"></span></div>
 
   <nav>
     <a class="logo" href={`${base}/`}><img src={`${base}/logo.svg`} alt="" />Claude&nbsp;Galaxy</a>
@@ -231,7 +259,7 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
         <button class="btn ghost" id="downloadBtn">⬇ Download the desktop app</button>
       </div>
     </div>
-    <div class="scroll-hint"><span class="mouse"><i></i></span><span>scroll</span></div>
+    <div class="scroll-hint"><span class="mouse"><i></i></span><span class="chev"></span><span class="txt">scroll</span></div>
   </section>
 
   <section class="story">
@@ -288,14 +316,14 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
           <p class="big reveal">Watch your toolkit <em>grow like a garden</em> — live, as you and Claude work.</p>
           <p class="note reveal" data-delay="1">Every file the editor or Claude touches ripples into the tree instantly — a fruit grows in, ripens, or drops with physics. No refresh, no export.</p>
         </div>
-        <div class="orbit reveal" data-delay="1" data-parallax="0.06"><div class="ring"><i></i></div><div class="ring"><i></i></div><div class="ring"><i></i></div><div class="core"></div></div>
+        <div class="orbit reveal" data-delay="1"><div class="ring"><i></i></div><div class="ring"><i></i></div><div class="ring"><i></i></div><div class="core"></div></div>
       </div>
     </div>
   </section>
   <section class="statement rev">
     <div class="wrap">
       <div class="row">
-        <div class="orbit reveal" data-parallax="0.09"><div class="ring"><i></i></div><div class="ring"><i></i></div><div class="ring"><i></i></div><div class="core"></div></div>
+        <div class="orbit reveal"><div class="ring"><i></i></div><div class="ring"><i></i></div><div class="ring"><i></i></div><div class="core"></div></div>
         <div class="txt">
           <p class="big reveal">Graft the best skills of other builders <em>straight onto your tree.</em></p>
           <p class="note reveal" data-delay="1">Browse the galaxy, find a skill orbiting someone else's star, and graft it — the file lands in your <code>.claude</code> folder, ready to use.</p>
@@ -310,7 +338,7 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
           <p class="big reveal">Your work stays yours — <em>every change needs your approval.</em></p>
           <p class="note reveal" data-delay="1">Grant a 30-minute edit window, and any change comes back as a proposal you review line-by-line. Nothing overwrites your work without your yes.</p>
         </div>
-        <div class="orbit reveal" data-delay="1" data-parallax="0.06"><div class="ring"><i></i></div><div class="ring"><i></i></div><div class="ring"><i></i></div><div class="core"></div></div>
+        <div class="orbit reveal" data-delay="1"><div class="ring"><i></i></div><div class="ring"><i></i></div><div class="ring"><i></i></div><div class="core"></div></div>
       </div>
     </div>
   </section>
@@ -419,6 +447,24 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
           location.href = dl.page;
         }
       });
+    }
+
+    /* ── custom planet cursor (fine-pointer only) ── */
+    const cur = document.getElementById("cursor");
+    if (cur && matchMedia("(pointer:fine)").matches) {
+      document.body.classList.add("has-cursor");
+      let cx = innerWidth / 2, cy = innerHeight / 2, tx = cx, ty = cy;
+      addEventListener("pointermove", (e) => { tx = e.clientX; ty = e.clientY; }, { passive: true });
+      addEventListener("pointerdown", () => { cur.classList.remove("down"); void cur.offsetWidth; cur.classList.add("down"); });
+      addEventListener("pointerup", () => cur.classList.remove("down"));
+      const hoverSel = "a,button,input,textarea,.tilt,.stat";
+      addEventListener("pointerover", (e) => { if ((e.target as Element)?.closest?.(hoverSel)) cur.classList.add("hover"); });
+      addEventListener("pointerout", (e) => { if ((e.target as Element)?.closest?.(hoverSel)) cur.classList.remove("hover"); });
+      (function follow() {
+        cx += (tx - cx) * 0.28; cy += (ty - cy) * 0.28;
+        cur.style.transform = `translate(${cx}px,${cy}px)`;
+        requestAnimationFrame(follow);
+      })();
     }
 
     /* ── scroll reveals ── */

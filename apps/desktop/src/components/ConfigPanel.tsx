@@ -88,9 +88,11 @@ export function ConfigPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** Header button that opens the config panel. */
+/** Header button that opens the config panel — only for signed-in users. */
 export function ConfigButton() {
   const [open, setOpen] = useState(false);
+  const session = useSession((s) => s.session);
+  if (!session) return null;
   return (
     <>
       <button

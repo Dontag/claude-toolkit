@@ -216,7 +216,7 @@ export default function App() {
         <input
           ref={searchRef}
           placeholder={tab === "galaxy" ? "Search the galaxy…  ( / )" : "Search fruits…  ( / )"}
-          className="ml-auto w-24 min-w-0 rounded-lg border border-border bg-black/30 px-3 py-1.5 text-xs outline-none transition focus:border-brand sm:w-40 md:w-56"
+          className="ml-auto min-w-0 flex-1 rounded-lg border border-border bg-black/30 px-3 py-1.5 text-xs outline-none transition focus:border-brand sm:flex-none sm:w-40 md:w-56"
           onKeyDown={(e) => {
             if (e.key === "Enter") search(e.currentTarget.value);
           }}

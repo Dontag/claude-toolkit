@@ -14,8 +14,9 @@ export interface ManualDownloads {
 }
 
 export const MANUAL_DOWNLOADS: ManualDownloads = {
-  version: null,
-  windows: null,
+  version: "0.1.0",
+  // Google Drive portable Windows build (uc?export=download forces a download)
+  windows: "https://drive.google.com/uc?export=download&id=1DAzRaZPW2WF89pNFxKJYpwui9v3b-ERK",
   mac: null,
   linux: null,
 };

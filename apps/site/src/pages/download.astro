@@ -42,18 +42,6 @@ const anyAvailable = oses.some((o) => o.url);
     ))}
   </div>
 
-  <h2>Heads-up: unsigned builds (for now)</h2>
-  <div class="card" style="color:var(--muted);font-size:14.5px;line-height:1.7">
-    Early builds aren't code-signed yet, so your OS will warn you on first launch:
-    <ul style="margin:10px 0 0 20px">
-      <li><strong>Windows SmartScreen</strong> — click <em>More info → Run anyway</em>.</li>
-      <li><strong>macOS Gatekeeper</strong> — right-click the app → <em>Open</em> → <em>Open</em> (needed once).</li>
-      <li><strong>Linux</strong> — <code>chmod +x</code> the AppImage, then run.</li>
-    </ul>
-    Every release is built in public by <a href="https://github.com/Dontag/claude-toolkit/actions">GitHub Actions</a> straight from the source you can read.
-    The app auto-updates itself after installation.
-  </div>
-
   {releases.length > 1 && (
     <>
       <h2>Previous releases</h2>

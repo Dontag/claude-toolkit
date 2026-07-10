@@ -14,6 +14,7 @@ import { kindColor, kindLaneOrder } from "../lib/kind-color";
 
 interface Planet {
   mesh: THREE.Mesh;
+  hit: THREE.Mesh; // invisible, larger — the actual click/tap target
   rim: THREE.Sprite;
   dust: THREE.Points;
   orbit: number;
@@ -725,12 +726,20 @@ export class GalaxyScene {
           planet.add(rim);
           const dust = this.makeDust(kc);
           planet.add(dust);
+          // invisible, much larger sphere = a comfortable click/tap target
+          // (the visual planets are tiny and hard to hit, esp. on touch)
+          const hit = new THREE.Mesh(
+            new THREE.SphereGeometry(Math.max(size * 3, 0.85), 8, 6),
+            new THREE.MeshBasicMaterial({ visible: false }),
+          );
+          hit.userData.item = item;
+          planet.add(hit);
           holder.add(planet);
 
           const planetBorn = this.knownItems.has(item.id) ? 0 : now;
           if (planetBorn) planet.scale.setScalar(0.01);
           // slight per-planet speed variance so a crowded lane doesn't look rigid
-          planets.push({ mesh: planet, rim, dust, orbit, angle, speed: 0.14 + (j % 4) * 0.04, tilt, item, born: planetBorn });
+          planets.push({ mesh: planet, hit, rim, dust, orbit, angle, speed: 0.14 + (j % 4) * 0.04, tilt, item, born: planetBorn });
         });
         lane++;
       }
@@ -1016,7 +1025,7 @@ export class GalaxyScene {
     const onClick = (e: MouseEvent) => {
       if (Math.abs(e.clientX - this.downX) > 4 || Math.abs(e.clientY - this.downY) > 4) return;
       this.ray.setFromCamera(this.mouse, this.camera);
-      const hits = this.ray.intersectObjects(this.systems.flatMap((s) => s.planets.map((p) => p.mesh)), false);
+      const hits = this.ray.intersectObjects(this.systems.flatMap((s) => s.planets.map((p) => p.hit)), false);
       this.cb.onItemSelected?.(hits.length ? (hits[0]!.object.userData.item as GalaxyItem) : null);
     };
     const onResize = () => {
@@ -1048,8 +1057,8 @@ export class GalaxyScene {
 
   private updateHover() {
     this.ray.setFromCamera(this.mouse, this.camera);
-    const hits = this.ray.intersectObjects(this.systems.flatMap((s) => s.planets.map((p) => p.mesh)), false);
-    const planet = hits.length ? this.systems.flatMap((s) => s.planets).find((p) => p.mesh === hits[0]!.object) ?? null : null;
+    const hits = this.ray.intersectObjects(this.systems.flatMap((s) => s.planets.map((p) => p.hit)), false);
+    const planet = hits.length ? this.systems.flatMap((s) => s.planets).find((p) => p.hit === hits[0]!.object) ?? null : null;
     if (planet !== this.hovered) {
       this.hovered = planet;
       if (this.container) this.container.style.cursor = planet ? "pointer" : "grab";
