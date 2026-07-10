@@ -172,67 +172,132 @@ function planetTextures(kindColor: number, seed: number): { map: THREE.CanvasTex
 
 let seedCounter = 1;
 
-/** Accretion-disk texture: hot blue-white inner edge → orange → deep ember,
- * with fine angular streaks and dark turbulence lanes so the spinning disk
- * reads as real matter (radial layout: the ring maps radius→x, angle→y, so
- * horizontal features become concentric rings and vertical ones swirl). */
+/** Top-down accretion disk (NASA artist's-impression style): a full swirl
+ * painted in canvas space and planar-mapped onto a flat circle — deep
+ * red-brown rim → orange → gold → white-hot inner edge, with thousands of
+ * short spiral streaks so the matter visibly swirls without any animation.
+ * (RingGeometry UVs are planar, so painting the swirl directly is the only
+ * mapping that doesn't degenerate into straight scan-lines.) */
 function accretionTexture(seed = 7): THREE.CanvasTexture {
-  const S = 512;
+  const S = 1024;
   const c = document.createElement("canvas");
   c.width = c.height = S;
   const x = c.getContext("2d")!;
   let s = seed;
   const rnd = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
-  // radial base gradient (left→right = inner→outer edge of the ring)
-  const g = x.createLinearGradient(0, 0, S, 0);
-  g.addColorStop(0.0, "rgba(210,235,255,1)"); // hot blue-white inner
-  g.addColorStop(0.08, "rgba(255,250,235,0.98)");
-  g.addColorStop(0.22, "rgba(255,214,150,0.9)");
-  g.addColorStop(0.45, "rgba(255,160,72,0.7)");
-  g.addColorStop(0.7, "rgba(205,84,44,0.38)");
-  g.addColorStop(0.88, "rgba(120,38,26,0.14)");
-  g.addColorStop(1.0, "rgba(60,18,14,0)");
+  const cx = S / 2;
+  const inner = S * 0.115; // hole radius (the shadow sits here)
+  const outer = S * 0.49;
+
+  // base radial wash: white-hot rim around the hole → gold → ember → fade out
+  const g = x.createRadialGradient(cx, cx, inner * 0.9, cx, cx, outer);
+  g.addColorStop(0.0, "rgba(255,248,232,1)");
+  g.addColorStop(0.06, "rgba(255,236,196,0.97)");
+  g.addColorStop(0.2, "rgba(255,190,105,0.88)");
+  g.addColorStop(0.45, "rgba(224,120,52,0.66)");
+  g.addColorStop(0.72, "rgba(150,58,30,0.4)");
+  g.addColorStop(0.9, "rgba(92,32,18,0.18)");
+  g.addColorStop(1.0, "rgba(50,16,10,0)");
   x.fillStyle = g;
-  x.fillRect(0, 0, S, S);
-  // fine angular streaks (turbulent shear around the ring)
-  x.globalCompositeOperation = "overlay";
-  for (let i = 0; i < 340; i++) {
-    const y = rnd() * S;
-    const h = 0.6 + rnd() * 2.6;
-    const a = rnd() * 0.5;
-    x.fillStyle = rnd() < 0.5 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a * 0.7})`;
-    x.fillRect(rnd() * S * 0.35, y, S, h);
+  x.beginPath();
+  x.arc(cx, cx, outer, 0, Math.PI * 2);
+  x.fill();
+
+  // spiral streaks: short arcs whose radius creeps outward as they sweep,
+  // bright gold near the hole and dark ember toward the rim
+  x.lineCap = "round";
+  for (let i = 0; i < 900; i++) {
+    const t0 = Math.pow(rnd(), 1.35); // bias streaks toward the inner half
+    const r0 = inner + t0 * (outer - inner);
+    let ang = rnd() * Math.PI * 2;
+    const sweep = 0.35 + rnd() * 1.1;
+    const steps = 8;
+    const dark = rnd() < 0.32;
+    const bright = 1 - t0;
+    x.strokeStyle = dark
+      ? `rgba(60,20,10,${0.05 + rnd() * 0.1})`
+      : `rgba(255,${(175 + bright * 75) | 0},${(95 + bright * 140) | 0},${0.04 + bright * 0.1 + rnd() * 0.05})`;
+    x.lineWidth = 0.8 + rnd() * 2.4;
+    x.beginPath();
+    for (let k = 0; k <= steps; k++) {
+      const a = ang + (sweep * k) / steps;
+      const r = r0 * (1 + 0.05 * (sweep * k) / steps);
+      const px = cx + Math.cos(a) * r;
+      const py = cx + Math.sin(a) * r;
+      k ? x.lineTo(px, py) : x.moveTo(px, py);
+    }
+    x.stroke();
   }
-  // dark turbulence lanes: concentric gaps that give the disk banding depth
-  x.globalCompositeOperation = "multiply";
-  for (let i = 0; i < 9; i++) {
-    const cxp = S * (0.2 + rnd() * 0.7);
-    const w = 3 + rnd() * 14;
-    const lg = x.createLinearGradient(cxp - w, 0, cxp + w, 0);
-    const d = 0.35 + rnd() * 0.35;
-    lg.addColorStop(0, "rgba(255,255,255,1)");
-    lg.addColorStop(0.5, `rgba(${255 * (1 - d)},${255 * (1 - d)},${255 * (1 - d)},1)`);
-    lg.addColorStop(1, "rgba(255,255,255,1)");
-    x.fillStyle = lg;
-    x.fillRect(cxp - w, 0, w * 2, S);
-  }
-  // hot clumps riding the inner half (bright knots of infalling matter)
+
+  // razor-bright inner rim (the hottest matter, right at the hole's edge)
+  x.globalCompositeOperation = "lighter";
+  x.strokeStyle = "rgba(255,252,240,0.9)";
+  x.lineWidth = 5;
+  x.beginPath();
+  x.arc(cx, cx, inner * 1.03, 0, Math.PI * 2);
+  x.stroke();
+
+  // punch the hole with a soft edge so the sphere sits in a dark well
+  x.globalCompositeOperation = "destination-out";
+  const hole = x.createRadialGradient(cx, cx, 0, cx, cx, inner);
+  hole.addColorStop(0, "rgba(0,0,0,1)");
+  hole.addColorStop(0.88, "rgba(0,0,0,1)");
+  hole.addColorStop(1, "rgba(0,0,0,0)");
+  x.fillStyle = hole;
+  x.beginPath();
+  x.arc(cx, cx, inner, 0, Math.PI * 2);
+  x.fill();
+
+  const t = new THREE.CanvasTexture(c);
+  t.minFilter = THREE.LinearFilter;
+  return t;
+}
+
+/** Wispy jet beam: bright core column with streaky edges, fading with
+ * height — planar-mapped onto an open cone. */
+function jetTexture(): THREE.CanvasTexture {
+  const W = 128;
+  const H = 512;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const x = c.getContext("2d")!;
+  let s = 17;
+  const rnd = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+  // vertical falloff: blinding at the base (bottom), fading to nothing at top
+  const v = x.createLinearGradient(0, H, 0, 0);
+  v.addColorStop(0, "rgba(255,255,255,0.95)");
+  v.addColorStop(0.25, "rgba(214,236,255,0.55)");
+  v.addColorStop(0.65, "rgba(170,210,255,0.22)");
+  v.addColorStop(1, "rgba(150,200,255,0)");
+  x.fillStyle = v;
+  x.fillRect(0, 0, W, H);
+  // horizontal core: bright center column, soft edges
+  x.globalCompositeOperation = "destination-in";
+  const hgrad = x.createLinearGradient(0, 0, W, 0);
+  hgrad.addColorStop(0, "rgba(0,0,0,0)");
+  hgrad.addColorStop(0.35, "rgba(0,0,0,0.9)");
+  hgrad.addColorStop(0.5, "rgba(0,0,0,1)");
+  hgrad.addColorStop(0.65, "rgba(0,0,0,0.9)");
+  hgrad.addColorStop(1, "rgba(0,0,0,0)");
+  x.fillStyle = hgrad;
+  x.fillRect(0, 0, W, H);
+  // wispy vertical filaments
   x.globalCompositeOperation = "lighter";
   for (let i = 0; i < 26; i++) {
-    const px = S * (0.05 + Math.pow(rnd(), 1.6) * 0.5);
-    const py = rnd() * S;
-    const r = 2 + rnd() * 8;
-    const cg = x.createRadialGradient(px, py, 0, px, py, r);
-    cg.addColorStop(0, `rgba(255,240,215,${0.25 + rnd() * 0.35})`);
-    cg.addColorStop(1, "rgba(255,240,215,0)");
-    x.fillStyle = cg;
+    const px = W * (0.25 + rnd() * 0.5);
+    const lg = x.createLinearGradient(0, H, 0, H * (0.1 + rnd() * 0.4));
+    lg.addColorStop(0, `rgba(230,244,255,${0.12 + rnd() * 0.2})`);
+    lg.addColorStop(1, "rgba(230,244,255,0)");
+    x.strokeStyle = lg;
+    x.lineWidth = 1 + rnd() * 3;
     x.beginPath();
-    x.arc(px, py, r, 0, Math.PI * 2);
-    x.fill();
+    x.moveTo(px, H);
+    x.bezierCurveTo(px + (rnd() - 0.5) * 26, H * 0.66, px + (rnd() - 0.5) * 34, H * 0.33, px + (rnd() - 0.5) * 40, 0);
+    x.stroke();
   }
   const t = new THREE.CanvasTexture(c);
   t.minFilter = THREE.LinearFilter;
-  t.wrapT = THREE.RepeatWrapping;
   return t;
 }
 
@@ -274,8 +339,6 @@ export class GalaxyScene {
   private freeNav = false;
   private center = new THREE.Vector3();
   private panTarget = new THREE.Vector3();
-  private accretion?: THREE.Mesh;
-  private accretionInner?: THREE.Mesh;
   private blackHole = new THREE.Group();
   private doppler?: THREE.Sprite;
   private accretionTexes: THREE.Texture[] = [];
@@ -398,93 +461,72 @@ export class GalaxyScene {
     const additive = (opts: THREE.MeshBasicMaterialParameters) =>
       new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, ...opts });
 
-    // event horizon: pure black sphere + a darkening halo that eats the disc
-    // glow behind it, so the shadow reads even against the bright core
-    const horizon = new THREE.Mesh(new THREE.SphereGeometry(2.6, 48, 32), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+    // ── the disk: one static painted swirl, laid flat (no spinning rings —
+    // the motion in the scene comes from the infalling motes only) ──
+    const diskTex = accretionTexture(7);
+    this.accretionTexes.push(diskTex); // material.dispose() won't free maps
+    const disk = new THREE.Mesh(
+      new THREE.CircleGeometry(11, 128),
+      new THREE.MeshBasicMaterial({ map: diskTex, transparent: true, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    disk.rotation.x = -Math.PI / 2;
+    bh.add(disk);
+
+    // event horizon: pure black sphere sitting in the disk's punched hole,
+    // plus a dark smudge so the shadow reads against the bright inner rim
+    const horizon = new THREE.Mesh(new THREE.SphereGeometry(1.15, 48, 32), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+    horizon.position.y = 0.32; // proud of the disk plane, like the reference
     bh.add(horizon);
     const shadow = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: this.glowTex, color: 0x000000, transparent: true, opacity: 0.85, depthWrite: false }),
+      new THREE.SpriteMaterial({ map: this.glowTex, color: 0x000000, transparent: true, opacity: 0.75, depthWrite: false }),
     );
-    shadow.scale.set(7.6, 7.6, 1);
+    shadow.scale.set(3.6, 3.2, 1);
+    shadow.position.y = 0.3;
     bh.add(shadow);
 
-    // main accretion disk — hot, streaky, banded, spinning
-    const diskTex = accretionTexture(7);
-    const innerTex = accretionTexture(29);
-    this.accretionTexes.push(diskTex, innerTex); // material.dispose() won't free maps
-    const disk = new THREE.Mesh(
-      new THREE.RingGeometry(2.9, 11, 200, 4),
-      additive({ map: diskTex, side: THREE.DoubleSide }),
-    );
-    disk.rotation.x = Math.PI / 2;
-    bh.add(disk);
-    this.accretion = disk;
-
-    // a second, fainter, faster counter-swirling inner disk for turbulence depth
-    const inner = new THREE.Mesh(
-      new THREE.RingGeometry(2.75, 5.5, 160, 2),
-      additive({ map: innerTex, opacity: 0.7, side: THREE.DoubleSide }),
-    );
-    inner.rotation.x = Math.PI / 2;
-    bh.add(inner);
-    this.accretionInner = inner;
-
-    // photon ring: razor-thin white-hot line hugging the horizon, plus a
-    // fainter secondary ring just outside it (higher-order lensed image)
-    const photon = new THREE.Mesh(
-      new THREE.TorusGeometry(2.72, 0.045, 16, 200),
-      additive({ color: 0xffffff, opacity: 1 }),
-    );
-    photon.rotation.x = Math.PI / 2;
-    bh.add(photon);
-    const photon2 = new THREE.Mesh(
-      new THREE.TorusGeometry(2.88, 0.02, 12, 160),
-      additive({ color: 0xffe9c8, opacity: 0.35 }),
-    );
-    photon2.rotation.x = Math.PI / 2;
-    bh.add(photon2);
-
-    // gravitational lensing: the far side of the disk appears folded OVER and
-    // UNDER the shadow (the Gargantua signature) — bright top arc, dim bottom
-    const lensTop = new THREE.Mesh(
-      new THREE.TorusGeometry(3.35, 0.11, 12, 140, Math.PI),
-      additive({ color: 0xffe8c0, opacity: 0.55 }),
-    );
-    bh.add(lensTop);
-    const lensBottom = new THREE.Mesh(
-      new THREE.TorusGeometry(3.0, 0.07, 12, 120, Math.PI),
-      additive({ color: 0xffd8a0, opacity: 0.22 }),
-    );
-    lensBottom.rotation.z = Math.PI;
-    bh.add(lensBottom);
-
-    // Doppler beaming: matter approaching the viewer glows hotter, so one
-    // side of the disk blooms brighter than the other
+    // hot smear on one side of the hole (the orange bloom in the reference)
     const doppler = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: this.softTex, color: 0xfff2d8, transparent: true, opacity: 0.42, blending: THREE.AdditiveBlending, depthWrite: false }),
+      new THREE.SpriteMaterial({ map: this.softTex, color: 0xffb867, transparent: true, opacity: 0.34, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
-    doppler.position.set(4.8, 0.2, 0);
-    doppler.scale.set(9.5, 3.6, 1);
+    doppler.position.set(2.1, 0.25, 0);
+    doppler.scale.set(4.2, 1.7, 1);
     bh.add(doppler);
     this.doppler = doppler;
 
-    // relativistic polar jets: faint cyan-white cones breathing along the axis
-    const jetGeo = new THREE.ConeGeometry(0.55, 10, 20, 1, true);
-    for (const dir of [1, -1] as const) {
-      const jet = new THREE.Mesh(jetGeo.clone(), additive({ color: 0x9fd8ff, opacity: 0.1, side: THREE.DoubleSide }));
-      jet.position.y = dir * 5.6;
-      if (dir === 1) jet.rotation.x = Math.PI;
-      bh.add(jet);
-      this.jets.push(jet);
-    }
+    // ── the jet: one dominant blue-white beam climbing out of the hole ──
+    const jetTex = jetTexture();
+    this.accretionTexes.push(jetTex);
+    const jetMat = additive({ map: jetTex, color: 0xdceeff, opacity: 0.85, side: THREE.DoubleSide });
+    const jet = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 0.55, 26, 28, 1, true), jetMat);
+    jet.position.y = 13.6;
+    bh.add(jet);
+    this.jets.push(jet);
+    // blinding core at the jet's base
+    const jetBase = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: this.glowTex, color: 0xf2f8ff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    jetBase.scale.set(3.4, 3.4, 1);
+    jetBase.position.y = 1.1;
+    bh.add(jetBase);
+    // faint mirrored counter-jet below the disk
+    const jetDown = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 0.4, 14, 20, 1, true), additive({ map: jetTex, color: 0xbcd8ff, opacity: 0.25, side: THREE.DoubleSide }));
+    jetDown.position.y = -7.4;
+    jetDown.rotation.z = Math.PI;
+    bh.add(jetDown);
+    this.jets.push(jetDown);
 
     this.buildInfall(bh);
 
-    // warm bloom over everything
-    const bloom = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffc98a, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false }),
+    // warm ember haze around the whole region (the deep red backdrop)
+    const haze = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: this.softTex, color: 0x7a2a12, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
-    bloom.scale.set(26, 26, 1);
+    haze.scale.set(46, 30, 1);
+    bh.add(haze);
+    const bloom = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffc98a, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    bloom.scale.set(20, 20, 1);
     bh.add(bloom);
     this.world.add(bh);
   }
@@ -1001,12 +1043,13 @@ export class GalaxyScene {
 
     this.disc.rotation.y += dt * 0.012;
     if (this.driftDust) this.driftDust.rotation.y -= dt * 0.005; // counter-drift parallax
-    if (this.accretion) this.accretion.rotation.z += dt * 0.35; // swirling disk
-    if (this.accretionInner) this.accretionInner.rotation.z -= dt * 0.6; // faster counter-swirl
-    if (this.doppler) this.doppler.material.opacity = 0.38 + Math.sin(t * 2.7) * 0.07;
+    // the disk itself is static (per design) — life comes from the infall
+    // motes, the shimmering hot smear, and the jet's slow breathing
+    if (this.doppler) this.doppler.material.opacity = 0.3 + Math.sin(t * 2.1) * 0.06;
     for (let j = 0; j < this.jets.length; j++) {
       const m = this.jets[j]!.material as THREE.MeshBasicMaterial;
-      m.opacity = 0.08 + Math.sin(t * 1.3 + j * Math.PI) * 0.035 + 0.035;
+      const base = j === 0 ? 0.85 : 0.25;
+      m.opacity = base * (0.9 + Math.sin(t * 0.9 + j * Math.PI) * 0.1);
     }
     // matter spiralling into the horizon: orbit faster as it falls, respawn outside
     if (this.infall) {
