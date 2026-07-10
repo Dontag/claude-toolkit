@@ -1,35 +1,29 @@
 ---
 import Base from "../layouts/Base.astro";
 import { loadReleases } from "../lib/data";
+import { resolveDownloads } from "../lib/downloads";
 
 const releases = loadReleases();
 const latest = releases[0] ?? null;
-
-function assetFor(patterns: RegExp[]) {
-  if (!latest) return null;
-  for (const p of patterns) {
-    const a = latest.assets.find((a) => p.test(a.name));
-    if (a) return a;
-  }
-  return null;
-}
-const mb = (n: number) => (n / 1048576).toFixed(1) + " MB";
+const dl = resolveDownloads(); // GitHub release asset, else a manual/OneDrive link
 const oses = [
-  { name: "Windows", emoji: "🪟", asset: assetFor([/\.msi$/i, /setup.*\.exe$/i, /\.exe$/i]), note: "Windows 10/11 · .msi installer" },
-  { name: "macOS", emoji: "🍎", asset: assetFor([/aarch64.*\.dmg$/i, /\.dmg$/i]), note: "Apple Silicon & Intel · .dmg" },
-  { name: "Linux", emoji: "🐧", asset: assetFor([/\.AppImage$/i, /\.deb$/i]), note: ".AppImage / .deb" },
+  { name: "Windows", emoji: "🪟", url: dl.windows, note: "Windows 10/11 · .msi / .exe installer" },
+  { name: "macOS", emoji: "🍎", url: dl.mac, note: "Apple Silicon & Intel · .dmg" },
+  { name: "Linux", emoji: "🐧", url: dl.linux, note: ".AppImage / .deb" },
 ];
+const anyAvailable = oses.some((o) => o.url);
 ---
 <Base title="Download — Claude Galaxy">
   <h1>Download</h1>
-  {latest ? (
+  {anyAvailable ? (
     <p class="lead" style="margin-top:10px">
-      Latest release: <strong>v{latest.version}</strong> · {new Date(latest.publishedAt).toISOString().slice(0, 10)}
+      {dl.version ? <>Latest build: <strong>v{dl.version}</strong> · </> : null}
+      Pick your platform below. Early builds aren't code-signed yet — see the note under the cards.
     </p>
   ) : (
     <p class="lead" style="margin-top:10px">
       The desktop app hasn't shipped its first release yet — it's in active development.
-      Meanwhile, the <a href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/dashboard/`}>web demo</a> shows the tree in your browser.
+      Meanwhile, <a href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/app/`}>explore the Galaxy in your browser</a>.
     </p>
   )}
 
@@ -39,8 +33,8 @@ const oses = [
         <div style="font-size:40px">{os.emoji}</div>
         <h2 style="margin:10px 0 4px;font-size:19px">{os.name}</h2>
         <div style="color:var(--muted);font-size:13px;margin-bottom:16px">{os.note}</div>
-        {os.asset ? (
-          <a class="btn primary" href={os.asset.url}>⬇ Download ({mb(os.asset.size)})</a>
+        {os.url ? (
+          <a class="btn primary" href={os.url}>⬇ Download for {os.name}</a>
         ) : (
           <span class="btn" style="opacity:.5;cursor:default">Coming soon</span>
         )}

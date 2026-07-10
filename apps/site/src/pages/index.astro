@@ -1,27 +1,13 @@
 ---
 // Cinematic parallax landing — 3D nebula hero, story scroll, founder, CTAs.
-import { loadReleases } from "../lib/data";
+import { resolveDownloads } from "../lib/downloads";
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-// Resolve the latest release's installer per OS so the hero "Download" button
-// can serve the visitor's platform directly. Absent before the first release —
-// the client then routes to the /download page (which shows the coming-soon state).
-const latest = loadReleases()[0] ?? null;
-const pick = (patterns: RegExp[]): string | null => {
-  if (!latest) return null;
-  for (const p of patterns) {
-    const a = latest.assets.find((a) => p.test(a.name));
-    if (a) return a.url;
-  }
-  return null;
-};
-const downloads = {
-  version: latest?.version ?? null,
-  windows: pick([/\.msi$/i, /setup\.exe$/i, /\.exe$/i]),
-  mac: pick([/aarch64.*\.dmg$/i, /\.dmg$/i]),
-  linux: pick([/\.AppImage$/i, /\.deb$/i]),
-  page: `${base}/download`,
-};
+// Per-OS installer (GitHub release asset, else a manual/OneDrive link) so the
+// hero "Download" button can serve the visitor's platform directly; when none
+// is set the client routes to the /download page.
+const r = resolveDownloads();
+const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r.linux, page: `${base}/download` };
 ---
 <html lang="en">
 <head>
