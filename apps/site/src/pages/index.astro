@@ -1,6 +1,27 @@
 ---
 // Cinematic parallax landing — 3D nebula hero, story scroll, founder, CTAs.
+import { loadReleases } from "../lib/data";
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+// Resolve the latest release's installer per OS so the hero "Download" button
+// can serve the visitor's platform directly. Absent before the first release —
+// the client then routes to the /download page (which shows the coming-soon state).
+const latest = loadReleases()[0] ?? null;
+const pick = (patterns: RegExp[]): string | null => {
+  if (!latest) return null;
+  for (const p of patterns) {
+    const a = latest.assets.find((a) => p.test(a.name));
+    if (a) return a.url;
+  }
+  return null;
+};
+const downloads = {
+  version: latest?.version ?? null,
+  windows: pick([/\.msi$/i, /setup\.exe$/i, /\.exe$/i]),
+  mac: pick([/aarch64.*\.dmg$/i, /\.dmg$/i]),
+  linux: pick([/\.AppImage$/i, /\.deb$/i]),
+  page: `${base}/download`,
+};
 ---
 <html lang="en">
 <head>
@@ -276,6 +297,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   </footer>
 
   <div id="toast"></div>
+  <script id="dl-data" type="application/json" set:html={JSON.stringify(downloads)}></script>
 
   <script>
     import * as THREE from "three";
@@ -289,8 +311,40 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       clearTimeout(toastT);
       toastT = setTimeout(() => toastEl.classList.remove("show"), 2800);
     }
+    /* ── platform-aware desktop download ──
+       detect the visitor's OS, relabel the buttons, and serve the matching
+       installer from the latest GitHub release; fall back to the /download
+       page (all platforms + coming-soon state) when no asset is available. */
+    interface Downloads { version: string | null; windows: string | null; mac: string | null; linux: string | null; page: string }
+    const dl = JSON.parse(document.getElementById("dl-data")!.textContent!) as Downloads;
+
+    function detectOS(): "windows" | "mac" | "linux" | null {
+      const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+      const s = (nav.userAgentData?.platform || navigator.platform || navigator.userAgent).toLowerCase();
+      // phones/tablets have no desktop build → route them to the download page
+      if (/android|iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase())) return null;
+      if (s.includes("win")) return "windows";
+      if (s.includes("mac")) return "mac";
+      if (s.includes("linux")) return "linux";
+      return null;
+    }
+    const OS_LABEL = { windows: "Windows", mac: "macOS", linux: "Linux" } as const;
+    const os = detectOS();
+    const assetUrl = os ? dl[os] : null;
+
     for (const id of ["downloadBtn", "downloadBtn2"]) {
-      document.getElementById(id)?.addEventListener("click", () => toast("🚀 Desktop installers are coming soon — explore online meanwhile!"));
+      const btn = document.getElementById(id);
+      if (!btn) continue;
+      if (os) btn.textContent = `⬇ Download for ${OS_LABEL[os]}`;
+      btn.addEventListener("click", () => {
+        if (assetUrl) {
+          toast(`⬇ Downloading Claude Galaxy${dl.version ? " v" + dl.version : ""} for ${OS_LABEL[os!]}…`);
+          location.href = assetUrl;
+        } else {
+          // no build for this OS yet (or unknown OS) → the full download page
+          location.href = dl.page;
+        }
+      });
     }
 
     /* ── scroll reveals ── */
