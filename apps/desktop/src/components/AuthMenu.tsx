@@ -4,6 +4,16 @@ import { useSession } from "../stores/session";
 import { confirm } from "../stores/confirm";
 import { useClickOutside } from "../lib/useClickOutside";
 
+/** Small inline spinner for auth loading states. */
+function Spinner({ className = "" }: { className?: string }) {
+  return (
+    <span
+      className={`inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent ${className}`}
+      aria-hidden
+    />
+  );
+}
+
 export function AuthMenu() {
   const session = useSession((s) => s.session);
   const profile = useSession((s) => s.profile);
@@ -14,6 +24,7 @@ export function AuthMenu() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   useClickOutside(rootRef, () => setOpen(false), open);
 
@@ -35,10 +46,14 @@ export function AuthMenu() {
             {(profile?.handle ?? "?").slice(0, 2).toUpperCase()}
           </span>
         )}
-        <span className="text-xs text-muted">@{profile?.handle ?? "…"}</span>
+        <span className="flex items-center gap-1 text-xs text-muted">
+          @{profile?.handle ?? "…"}
+          {!profile && <Spinner className="h-3 w-3" />}
+        </span>
         <button
-          className="btn-ghost text-xs"
+          className="btn-ghost flex items-center justify-center text-xs disabled:opacity-60"
           title="Sign out"
+          disabled={signingOut}
           onClick={async () => {
             const ok = await confirm({
               title: "Sign out?",
@@ -46,10 +61,13 @@ export function AuthMenu() {
               confirmLabel: "Sign out",
               danger: true,
             });
-            if (ok) void useSession.getState().signOut();
+            if (!ok) return;
+            setSigningOut(true);
+            await useSession.getState().signOut();
+            setSigningOut(false); // usually unmounts first, but reset if it doesn't
           }}
         >
-          ⏻
+          {signingOut ? <Spinner /> : "⏻"}
         </button>
       </div>
     );
@@ -57,17 +75,19 @@ export function AuthMenu() {
 
   return (
     <div className="relative" ref={rootRef}>
-      <button className="btn" onClick={() => setOpen((o) => !o)}>
+      <button className="btn flex items-center gap-1.5" onClick={() => setOpen((o) => !o)}>
+        {busy && <Spinner />}
         {busy ? "Signing in…" : "Sign in"}
       </button>
       {open && (
         <div className="absolute right-0 top-10 z-50 w-72 rounded-2xl border border-border bg-[#0e1328] p-4 shadow-2xl">
           <button
-            className="btn-primary w-full"
+            className="btn-primary flex w-full items-center justify-center gap-2"
             disabled={busy}
             onClick={() => void useSession.getState().signInWithGitHub()}
           >
-             Continue with GitHub
+            {busy && <Spinner />}
+            Continue with GitHub
           </button>
           <div className="my-3 flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted">
             <span className="h-px flex-1 bg-border" /> or email <span className="h-px flex-1 bg-border" />
@@ -90,7 +110,12 @@ export function AuthMenu() {
             }}
           />
           <div className="flex gap-2">
-            <button className="btn flex-1" disabled={busy || !email || !password} onClick={() => void submit()}>
+            <button
+              className="btn flex flex-1 items-center justify-center gap-1.5"
+              disabled={busy || !email || !password}
+              onClick={() => void submit()}
+            >
+              {busy && <Spinner />}
               {mode === "signin" ? "Sign in" : "Create account"}
             </button>
             <button

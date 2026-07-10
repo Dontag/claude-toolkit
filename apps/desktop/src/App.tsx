@@ -4,7 +4,7 @@ import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { bootstrapInventory, sourceState } from "./sources/bootstrap";
 import { useInventory } from "./stores/inventory";
 import { useUi } from "./stores/ui";
-import { TreeView, sceneRef } from "./components/TreeView";
+import { sceneRef } from "./components/sceneRef";
 import { ItemPanel } from "./components/ItemPanel";
 import { AuthMenu } from "./components/AuthMenu";
 import { AccessCenter } from "./components/AccessCenter";
@@ -19,6 +19,8 @@ import { initClaudeFolder } from "./sources/bootstrap";
 
 // The Galaxy pulls in a second three.js scene + realtime — only load it when opened
 const GalaxyTab = lazy(() => import("./components/GalaxyTab").then((m) => ({ default: m.GalaxyTab })));
+// The Personal tree is its own three.js scene — lazy so web/mobile (Galaxy-only) skips it
+const TreeView = lazy(() => import("./components/TreeView").then((m) => ({ default: m.TreeView })));
 import { RefreshButton } from "./components/RefreshButton";
 import { HudFrame } from "./components/HudFrame";
 import { rescanLocal } from "./sources/bootstrap";
@@ -212,48 +214,52 @@ export default function App() {
           <TabButton id="galaxy" label="🌌 Galaxy" />
         </nav>
 
-        {/* center: search (both tabs) */}
-        <input
-          ref={searchRef}
-          placeholder={tab === "galaxy" ? "Search the galaxy…  ( / )" : "Search fruits…  ( / )"}
-          className="ml-auto min-w-0 flex-1 rounded-lg border border-border bg-black/30 px-3 py-1.5 text-base outline-none transition focus:border-brand sm:w-40 sm:flex-none sm:text-xs md:w-56"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") search(e.currentTarget.value);
-          }}
-        />
-
-        {/* center-right: contextual actions */}
-        {tab === "personal" && mode === "local" && (
-          <>
-            <button
-              className="rounded-full border border-emerald-400/40 bg-black/30 px-3 py-1 text-[11px] text-emerald-300 transition hover:border-emerald-400"
-              title="Add a skill, agent, command, hook or other Claude item to your tree"
-              onClick={() => setAddOpen(true)}
-            >
-              ✚ Add
-            </button>
-            <RefreshButton onRefresh={rescanLocal} label="Rescan" />
-          </>
-        )}
-        {tab === "galaxy" && <RefreshButton onRefresh={fetchGalaxy} label="Rescan" />}
-        {!IS_WEB && (
-          <button
-            className="hidden rounded-full border border-border bg-black/30 px-3 py-1 text-[11px] text-muted transition hover:border-brand hover:text-text lg:inline"
-            title={mode === "local" ? "Open your .claude folder" : "Demo mode"}
-            onClick={() => {
-              if (sourceState.local) void revealItemInDir(sourceState.local.root).catch(() => {});
+        {/* search + contextual actions — its own full-width row on phones
+            (order-last), inline and right-aligned on sm+ (before the account
+            cluster in the DOM so it sits to its left) */}
+        <div className="order-last flex w-full items-center gap-2 sm:order-none sm:ml-auto sm:w-auto">
+          <input
+            ref={searchRef}
+            placeholder={tab === "galaxy" ? "Search the galaxy…  ( / )" : "Search fruits…  ( / )"}
+            className="min-w-0 flex-1 rounded-lg border border-border bg-black/30 px-3 py-1.5 text-base outline-none transition focus:border-brand sm:w-40 sm:flex-none sm:text-xs md:w-56"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") search(e.currentTarget.value);
             }}
-          >
-            {mode === "local" ? `📂 ${count}` : "🔒 demo"}
-          </button>
-        )}
+          />
+          {tab === "personal" && mode === "local" && (
+            <>
+              <button
+                className="shrink-0 rounded-full border border-emerald-400/40 bg-black/30 px-3 py-1.5 text-[11px] text-emerald-300 transition hover:border-emerald-400"
+                title="Add a skill, agent, command, hook or other Claude item to your tree"
+                onClick={() => setAddOpen(true)}
+              >
+                ✚ Add
+              </button>
+              <RefreshButton onRefresh={rescanLocal} label="Rescan" />
+            </>
+          )}
+          {tab === "galaxy" && <RefreshButton onRefresh={fetchGalaxy} label="Rescan" />}
+        </div>
 
-        {/* far right: system + account */}
-        <span className="mx-1 h-5 w-px bg-border" />
-        <AdminButton />
-        <AccessCenter />
-        <ConfigButton />
-        <AuthMenu />
+        {/* right: system + account cluster — ml-auto keeps it right on every row */}
+        <div className="ml-auto flex shrink-0 items-center gap-2 sm:ml-2">
+          {!IS_WEB && (
+            <button
+              className="hidden rounded-full border border-border bg-black/30 px-3 py-1 text-[11px] text-muted transition hover:border-brand hover:text-text lg:inline"
+              title={mode === "local" ? "Open your .claude folder" : "Demo mode"}
+              onClick={() => {
+                if (sourceState.local) void revealItemInDir(sourceState.local.root).catch(() => {});
+              }}
+            >
+              {mode === "local" ? `📂 ${count}` : "🔒 demo"}
+            </button>
+          )}
+          <span className="hidden h-5 w-px bg-border sm:block" />
+          <AdminButton />
+          <AccessCenter />
+          <ConfigButton />
+          <AuthMenu />
+        </div>
       </header>
 
       {!onlineStatus && (
@@ -265,7 +271,11 @@ export default function App() {
       <main className="relative min-h-0 flex-1">
         {tab === "personal" ? (
           <>
-            {ready && <TreeView />}
+            {ready && (
+              <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-muted">Growing your tree…</div>}>
+                <TreeView />
+              </Suspense>
+            )}
             <HudFrame accent="#5fae7d" />
             <ItemPanel />
             {ready && mode === "demo" && (

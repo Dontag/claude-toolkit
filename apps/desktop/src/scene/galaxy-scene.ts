@@ -964,20 +964,28 @@ export class GalaxyScene {
     el.style.touchAction = "none"; // we own pinch + drag; stop browser pan/zoom
     const ptrs = new Map<number, [number, number]>();
     let pinchDist = 0;
+    let pinchMid: [number, number] | null = null;
     let panning = false;
     const onDown = (e: PointerEvent) => {
       ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-      // Free flight: plain drag PANS (move freely in X/Y), Shift/right-drag
-      // rotates the view. Locked: plain drag orbits the centre.
       const rotateMod = e.button === 2 || e.shiftKey;
-      panning = this.freeNav && !rotateMod;
       if (ptrs.size === 2) {
-        // second finger down → pinch zoom, cancel the drag
+        // two fingers → pinch-zoom + two-finger pan; cancel any single drag
         const [a, b] = [...ptrs.values()];
         pinchDist = Math.hypot(a![0] - b![0], a![1] - b![1]);
+        pinchMid = [(a![0] + b![0]) / 2, (a![1] + b![1]) / 2];
         this.dragging = false;
         panning = false;
-      } else this.dragging = !panning;
+      } else if (e.pointerType === "touch") {
+        // Touch: one finger ALWAYS rotates/orbits (both locked and free) — the
+        // only way to rotate on a phone; pan + zoom are the two-finger gestures.
+        this.dragging = true;
+        panning = false;
+      } else {
+        // Mouse: free flight pans (Shift/right-drag rotates); locked orbits.
+        panning = this.freeNav && !rotateMod;
+        this.dragging = !panning;
+      }
       this.lastX = this.downX = e.clientX;
       this.lastY = this.downY = e.clientY;
     };
@@ -986,10 +994,20 @@ export class GalaxyScene {
       if (ptrs.size === 2) {
         const [a, b] = [...ptrs.values()];
         const d = Math.hypot(a![0] - b![0], a![1] - b![1]);
+        const mx = (a![0] + b![0]) / 2, my = (a![1] + b![1]) / 2;
         if (pinchDist > 0 && d > 0) {
           this.targetDist = Math.min(this.maxDist, Math.max(5, this.targetDist * (pinchDist / d)));
         }
+        // two-finger drag pans the focus point (the pan gesture on touch)
+        if (pinchMid) {
+          const dx = (mx - pinchMid[0]) * this.dist * 0.0015;
+          const dy = (my - pinchMid[1]) * this.dist * 0.0015;
+          const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrix, 0);
+          const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrix, 1);
+          this.panTarget.addScaledVector(right, -dx).addScaledVector(up, dy);
+        }
         pinchDist = d;
+        pinchMid = [mx, my];
       } else if (panning) {
         // move the focus point across the view plane
         const dx = (e.clientX - this.lastX) * this.dist * 0.0015;
@@ -1011,7 +1029,10 @@ export class GalaxyScene {
     };
     const onUp = (e: PointerEvent) => {
       ptrs.delete(e.pointerId);
-      if (ptrs.size < 2) pinchDist = 0;
+      if (ptrs.size < 2) {
+        pinchDist = 0;
+        pinchMid = null;
+      }
       if (!ptrs.size) {
         this.dragging = false;
         panning = false;
@@ -1025,6 +1046,11 @@ export class GalaxyScene {
     const onClick = (e: MouseEvent) => {
       // fingers jitter more than a mouse — allow a looser tap tolerance
       if (Math.abs(e.clientX - this.downX) > 10 || Math.abs(e.clientY - this.downY) > 10) return;
+      // recompute the ray from the actual tap point: a clean touch tap emits
+      // no pointermove, so this.mouse would be stale and the raycast would miss
+      const rect = el.getBoundingClientRect();
+      this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       this.ray.setFromCamera(this.mouse, this.camera);
       const hits = this.ray.intersectObjects(this.systems.flatMap((s) => s.planets.map((p) => p.hit)), false);
       this.cb.onItemSelected?.(hits.length ? (hits[0]!.object.userData.item as GalaxyItem) : null);

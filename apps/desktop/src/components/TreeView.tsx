@@ -3,6 +3,7 @@ import type { ToolkitItem } from "@claude-toolkit/core";
 import { SkillTreeScene, type SceneItem } from "../scene/scene";
 import { useInventory } from "../stores/inventory";
 import { useUi } from "../stores/ui";
+import { sceneRef } from "./sceneRef";
 
 const toSceneItem = (i: ToolkitItem): SceneItem => ({
   id: i.id,
@@ -11,9 +12,6 @@ const toSceneItem = (i: ToolkitItem): SceneItem => ({
   description: i.description,
   added: i.added,
 });
-
-/** Imperative bridge so header search etc. can drive the scene. */
-export const sceneRef: { current: SkillTreeScene | null } = { current: null };
 
 export function TreeView() {
   const ref = useRef<HTMLDivElement>(null);
