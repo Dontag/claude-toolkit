@@ -16,6 +16,7 @@ import { fmtCountdown, useCountdown } from "../lib/useCountdown";
 import { Modal } from "./Modal";
 
 import { kindColorHex } from "../lib/kind-color";
+import { Spinner } from "./Spinner";
 
 export function ItemPanel() {
   const selectedId = useUi((s) => s.selectedId);
@@ -24,6 +25,7 @@ export function ItemPanel() {
   const mode = useInventory((s) => s.mode);
   const showToast = useUi((s) => s.showToast);
   const [content, setContent] = useState<string | null>(null);
+  const [loadingContent, setLoadingContent] = useState(false);
   const [draft, setDraft] = useState("");
   const [confirming, setConfirming] = useState(false);
 
@@ -33,10 +35,12 @@ export function ItemPanel() {
     useUi.getState().setEditorOpen(false);
     if (!item) return;
     if (sourceState.local) {
+      setLoadingContent(true);
       sourceState.local
         .readFile(item)
         .then(setContent)
-        .catch(() => setContent(null));
+        .catch(() => setContent(null))
+        .finally(() => setLoadingContent(false));
     }
   }, [item?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -159,11 +163,16 @@ export function ItemPanel() {
 
         {mode === "local" && galaxyConfigured && <ShareControls itemId={item.id} content={content} />}
 
-        {content !== null && !editorOpen && (
-          <pre className="mt-3 max-h-56 overflow-y-auto whitespace-pre-wrap break-words rounded-xl border border-border bg-black/30 p-3 font-mono text-[11px] leading-relaxed text-muted">
-            {content}
-          </pre>
-        )}
+        {!editorOpen &&
+          (loadingContent ? (
+            <div className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-black/20 p-3 text-[11px] text-muted">
+              <Spinner /> Loading file…
+            </div>
+          ) : content !== null ? (
+            <pre className="mt-3 max-h-56 overflow-y-auto whitespace-pre-wrap break-words rounded-xl border border-border bg-black/30 p-3 font-mono text-[11px] leading-relaxed text-muted">
+              {content}
+            </pre>
+          ) : null)}
       </aside>
 
       {/* editor modal */}

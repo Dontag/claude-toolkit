@@ -62,7 +62,10 @@ export function AccessCenter() {
       </button>
 
       {open && (
-        <div className="hud-panel absolute right-0 top-10 z-50 max-h-[70vh] w-80 overflow-y-auto p-3">
+        // Mobile: fixed to the viewport (right-anchored, viewport-fit width) so
+        // it never gets cropped off the left edge. Desktop: dropdown under the
+        // bell. Still a DOM child of the root, so click-outside keeps working.
+        <div className="hud-panel fixed right-2 top-14 z-50 max-h-[70vh] w-[min(20rem,calc(100vw-1rem))] overflow-y-auto p-3 sm:absolute sm:right-0 sm:top-10 sm:w-80">
           {pending > 0 && (
             <section className="mb-3">
               <div className="hud-label mb-1">Requests for your items</div>

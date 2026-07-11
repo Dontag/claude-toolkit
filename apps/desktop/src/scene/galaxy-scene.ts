@@ -404,6 +404,16 @@ export class GalaxyScene {
     return null;
   }
 
+  /** Recenter the camera to the default whole-galaxy framing (drives the ✕). */
+  resetView() {
+    this.panTarget.set(0, 0, 0);
+    let maxR = 0;
+    for (const s of this.systems) maxR = Math.max(maxR, Math.hypot(s.group.position.x, s.group.position.z));
+    this.targetDist = Math.min(this.maxDist, Math.max(24, maxR * 1.9 + 16));
+    this.targetTheta = 0.6;
+    this.targetPhi = 1.1;
+  }
+
   /* ── Backdrop: procedural spiral galaxy (threejs-style generator) ── */
   private buildDisc() {
     const N = 26000;

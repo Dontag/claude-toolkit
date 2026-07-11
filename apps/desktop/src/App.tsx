@@ -29,7 +29,7 @@ import { fetchGalaxy } from "./lib/galaxy";
 import { IS_WEB } from "./lib/platform";
 import { checkForUpdates } from "./updater";
 import LOGO from "./assets/logo.svg";
-import { galaxySearchRef } from "./components/GalaxyTab";
+import { galaxySearchRef, galaxyResetRef } from "./components/GalaxyTab";
 import { FreeLockControl } from "./components/FreeLockControl";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { useSession } from "./stores/session";
@@ -48,6 +48,7 @@ export default function App() {
   const searchRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [searchText, setSearchText] = useState("");
 
   useEffect(() => {
     if (IS_WEB) {
@@ -199,6 +200,17 @@ export default function App() {
     if (matches.length > 1) useUi.getState().showToast(`${c.index + 1}/${matches.length} — Enter for next`);
   };
 
+  // ✕ in the search box: clear the query, drop any selection, and fly the
+  // camera back to the default locked-orbit framing (both tabs).
+  const clearSearch = () => {
+    setSearchText("");
+    cycleRef.current = { query: "", index: 0 };
+    useUi.getState().select(null);
+    if (useUi.getState().tab === "galaxy") galaxyResetRef.current?.();
+    else sceneRef.current?.resetView();
+    searchRef.current?.focus();
+  };
+
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-transparent text-text">
       {/* flex-wrap (not overflow scroll): on narrow phones the controls wrap
@@ -214,35 +226,49 @@ export default function App() {
           <TabButton id="galaxy" label="🌌 Galaxy" />
         </nav>
 
-        {/* search + contextual actions — its own full-width row on phones
-            (order-last), inline and right-aligned on sm+ (before the account
-            cluster in the DOM so it sits to its left) */}
-        <div className="order-last flex w-full items-center gap-2 sm:order-none sm:ml-auto sm:w-auto">
+        {/* search — its own full-width row at the BOTTOM on phones (order-last),
+            inline & right-aligned on sm+. The ✕ clears the query and resets the
+            camera to the locked-orbit default. */}
+        <div className="relative order-last w-full sm:order-none sm:ml-auto sm:w-40 md:w-56">
           <input
             ref={searchRef}
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
             placeholder={tab === "galaxy" ? "Search the galaxy…  ( / )" : "Search fruits…  ( / )"}
-            className="min-w-0 flex-1 rounded-lg border border-border bg-black/30 px-3 py-1.5 text-base outline-none transition focus:border-brand sm:w-40 sm:flex-none sm:text-xs md:w-56"
+            className="w-full rounded-lg border border-border bg-black/30 py-1.5 pl-3 pr-8 text-base outline-none transition focus:border-brand sm:text-xs"
             onKeyDown={(e) => {
               if (e.key === "Enter") search(e.currentTarget.value);
             }}
           />
-          {tab === "personal" && mode === "local" && (
-            <>
-              <button
-                className="shrink-0 rounded-full border border-emerald-400/40 bg-black/30 px-3 py-1.5 text-[11px] text-emerald-300 transition hover:border-emerald-400"
-                title="Add a skill, agent, command, hook or other Claude item to your tree"
-                onClick={() => setAddOpen(true)}
-              >
-                ✚ Add
-              </button>
-              <RefreshButton onRefresh={rescanLocal} label="Rescan" />
-            </>
+          {searchText && (
+            <button
+              className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-[11px] text-muted transition hover:bg-white/10 hover:text-text"
+              onClick={clearSearch}
+              aria-label="Clear search and reset view"
+              title="Clear & reset view"
+            >
+              ✕
+            </button>
           )}
-          {tab === "galaxy" && <RefreshButton onRefresh={fetchGalaxy} label="Rescan" />}
         </div>
 
-        {/* right: system + account cluster — ml-auto keeps it right on every row */}
-        <div className="ml-auto flex shrink-0 items-center gap-2 sm:ml-2">
+        {/* contextual actions — top row */}
+        {tab === "personal" && mode === "local" && (
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              className="rounded-full border border-emerald-400/40 bg-black/30 px-3 py-1.5 text-[11px] text-emerald-300 transition hover:border-emerald-400"
+              title="Add a skill, agent, command, hook or other Claude item to your tree"
+              onClick={() => setAddOpen(true)}
+            >
+              ✚ Add
+            </button>
+            <RefreshButton onRefresh={rescanLocal} label="Rescan" />
+          </div>
+        )}
+        {tab === "galaxy" && <RefreshButton onRefresh={fetchGalaxy} label="Rescan" />}
+
+        {/* account + system cluster — top row, right */}
+        <div className="ml-auto flex shrink-0 items-center gap-2 sm:ml-1">
           {!IS_WEB && (
             <button
               className="hidden rounded-full border border-border bg-black/30 px-3 py-1 text-[11px] text-muted transition hover:border-brand hover:text-text lg:inline"

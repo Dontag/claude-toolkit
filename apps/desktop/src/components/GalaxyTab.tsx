@@ -15,11 +15,14 @@ import { confirm } from "../stores/confirm";
 import { Modal } from "./Modal";
 // palette for core kinds, hash-stable colors for anything new (plugins, …)
 import { kindColorHex } from "../lib/kind-color";
+import { Spinner } from "./Spinner";
 
 const Editor = lazy(() => import("./Editor").then((m) => ({ default: m.Editor })));
 
 /** Imperative hook so the header search box can drive the Galaxy tab. */
 export const galaxySearchRef: { current: ((q: string) => void) | null } = { current: null };
+/** Reset the galaxy view (deselect + camera back to default). Driven by the header's ✕. */
+export const galaxyResetRef: { current: (() => void) | null } = { current: null };
 
 /** "Request changes" on someone else's item (hidden on your own). */
 function RequestChangesButton({ item }: { item: GalaxyItem }) {
@@ -78,6 +81,7 @@ function GalaxyLive() {
   const sceneRef = useRef<GalaxyScene | null>(null);
   const [selected, setSelected] = useState<GalaxyItem | null>(null);
   const [content, setContent] = useState<string | null>(null);
+  const [loadingContent, setLoadingContent] = useState(false);
   const [grafting, setGrafting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -154,6 +158,11 @@ function GalaxyLive() {
       setSelected(hit);
       if (matches.length > 1) useUi.getState().showToast(`${matchIdx + 1} of ${matches.length} — press Enter for the next`);
     };
+    galaxyResetRef.current = () => {
+      lastQ = "";
+      setSelected(null);
+      scene.resetView();
+    };
     void fetchGalaxy();
     subscribeGalaxy();
     joinGalaxyPresence();
@@ -179,6 +188,7 @@ function GalaxyLive() {
       unsubPresence();
       unsubNav();
       galaxySearchRef.current = null;
+      galaxyResetRef.current = null;
       sceneRef.current = null;
       scene.dispose();
     };
@@ -190,8 +200,12 @@ function GalaxyLive() {
     // stale-guard: a slow fetch for a previously selected item must not
     // overwrite the content of the one selected (or version-bumped) after it
     let stale = false;
+    setLoadingContent(true);
     void fetchItemContent(selected).then((c) => {
-      if (!stale) setContent(c);
+      if (!stale) {
+        setContent(c);
+        setLoadingContent(false);
+      }
     });
     return () => {
       stale = true;
@@ -295,10 +309,18 @@ function GalaxyLive() {
             )}
           </div>
           <GrantStatus itemId={selected.id} />
-          {content !== null && (
+          {loadingContent ? (
+            <div className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-black/20 p-3 text-[11px] text-muted">
+              <Spinner /> Loading content…
+            </div>
+          ) : content !== null ? (
             <pre className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-xl border border-border bg-black/30 p-3 font-mono text-[11px] leading-relaxed text-muted">
               {content}
             </pre>
+          ) : (
+            <div className="mt-3 rounded-xl border border-border bg-black/20 p-3 text-[11px] text-muted">
+              No content to show yet.
+            </div>
           )}
         </aside>
       )}

@@ -49,11 +49,13 @@ export function RefreshButton({ onRefresh, label = "Refresh" }: Props) {
       onClick={click}
       title={!online ? "Offline" : cooldown > 0 ? `Wait ${cooldown}s` : label}
       aria-busy={spinning}
-      className="flex items-center gap-1 rounded-full border border-border bg-black/30 px-3 py-1 text-[11px] text-muted transition hover:border-brand hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex items-center gap-1 rounded-full border border-border bg-black/30 px-2.5 py-1.5 text-[11px] text-muted transition hover:border-brand hover:text-text disabled:cursor-not-allowed disabled:opacity-40 sm:px-3 sm:py-1"
       disabled={disabled}
     >
       <span className={spinning ? "inline-block animate-spin" : ""}>↻</span>
-      {spinning ? "Refreshing…" : cooldown > 0 ? `${cooldown}s` : label}
+      {/* label collapses to just the ↻ icon on phones to keep the header on one line */}
+      <span className="hidden sm:inline">{spinning ? "Refreshing…" : cooldown > 0 ? `${cooldown}s` : label}</span>
+      {cooldown > 0 && <span className="sm:hidden">{cooldown}</span>}
     </button>
   );
 }

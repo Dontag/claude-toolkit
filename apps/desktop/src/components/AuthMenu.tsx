@@ -1,18 +1,9 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { galaxyConfigured } from "../lib/supabase";
 import { useSession } from "../stores/session";
 import { confirm } from "../stores/confirm";
 import { useClickOutside } from "../lib/useClickOutside";
-
-/** Small inline spinner for auth loading states. */
-function Spinner({ className = "" }: { className?: string }) {
-  return (
-    <span
-      className={`inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent ${className}`}
-      aria-hidden
-    />
-  );
-}
+import { Spinner } from "./Spinner";
 
 export function AuthMenu() {
   const session = useSession((s) => s.session);
@@ -25,11 +16,19 @@ export function AuthMenu() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [signingOut, setSigningOut] = useState(false);
+  // which action is in flight, so ONLY that button spins (not every one)
+  const [pending, setPending] = useState<"github" | "email" | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   useClickOutside(rootRef, () => setOpen(false), open);
 
+  // the shared authBusy flag clearing means the attempt finished
+  useEffect(() => {
+    if (!busy) setPending(null);
+  }, [busy]);
+
   const submit = async () => {
     if (busy || !email || !password) return;
+    setPending("email");
     const fn = mode === "signin" ? useSession.getState().signInWithEmail : useSession.getState().signUpWithEmail;
     if (await fn(email, password)) setOpen(false);
   };
@@ -76,17 +75,20 @@ export function AuthMenu() {
   return (
     <div className="relative" ref={rootRef}>
       <button className="btn flex items-center gap-1.5" onClick={() => setOpen((o) => !o)}>
-        {busy && <Spinner />}
-        {busy ? "Signing in…" : "Sign in"}
+        {busy && !open && <Spinner />}
+        {busy && !open ? "Signing in…" : "Sign in"}
       </button>
       {open && (
         <div className="absolute right-0 top-10 z-50 w-72 rounded-2xl border border-border bg-[#0e1328] p-4 shadow-2xl">
           <button
             className="btn-primary flex w-full items-center justify-center gap-2"
             disabled={busy}
-            onClick={() => void useSession.getState().signInWithGitHub()}
+            onClick={() => {
+              setPending("github");
+              void useSession.getState().signInWithGitHub();
+            }}
           >
-            {busy && <Spinner />}
+            {pending === "github" && <Spinner />}
             Continue with GitHub
           </button>
           <div className="my-3 flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted">
@@ -115,7 +117,7 @@ export function AuthMenu() {
               disabled={busy || !email || !password}
               onClick={() => void submit()}
             >
-              {busy && <Spinner />}
+              {pending === "email" && <Spinner />}
               {mode === "signin" ? "Sign in" : "Create account"}
             </button>
             <button
