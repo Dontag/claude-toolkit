@@ -81,7 +81,9 @@ export default function App() {
   // signed in → learn which local items are already shared + join presence
   useEffect(() => {
     if (!galaxyConfigured) return;
-    const sync = (signedIn: boolean) => {
+    // `announce` gates the toast so it only fires on a real sign-out
+    // transition — never on the initial mount when simply not signed in.
+    const sync = (signedIn: boolean, announce: boolean) => {
       if (signedIn) {
         void hydrateSharedState([...useInventory.getState().items.values()]);
         joinGalaxyPresence();
@@ -95,12 +97,12 @@ export default function App() {
         usePublish.setState({ shared: new Map() });
         useAccess.setState({ incoming: [], outgoing: [], grants: new Map(), notifications: [], unread: 0 });
         useProposals.setState({ pendingForMe: [] });
-        useUi.getState().showToast("Signed out — Galaxy is view-only until you sign back in");
+        if (announce) useUi.getState().showToast("Signed out — Galaxy is view-only until you sign back in");
       }
     };
-    sync(!!useSession.getState().session);
+    sync(!!useSession.getState().session, false);
     return useSession.subscribe((s, prev) => {
-      if (!!s.session !== !!prev.session) sync(!!s.session);
+      if (!!s.session !== !!prev.session) sync(!!s.session, true);
     });
   }, []);
 

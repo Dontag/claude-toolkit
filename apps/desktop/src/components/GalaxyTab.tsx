@@ -7,6 +7,7 @@ import { joinGalaxyPresence, usePresence, userColor } from "../lib/presence";
 import { GalaxyScene } from "../scene/galaxy-scene";
 import { useSession } from "../stores/session";
 import { useUi } from "../stores/ui";
+import { usePublish } from "../lib/publish";
 import { HudFrame } from "./HudFrame";
 import { requestChanges, useAccess } from "../lib/access";
 import { proposeChange } from "../lib/proposals";
@@ -86,6 +87,10 @@ function GalaxyLive() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const uid = useSession((s) => s.session?.user.id);
+  const shared = usePublish((s) => s.shared);
+  // is the open item mine, and is it already installed on THIS machine?
+  const isOwn = !!uid && !!selected && selected.ownerId === uid;
+  const alreadyLocal = !!selected && [...shared.values()].some((m) => m.cloudItemId === selected.id);
   const myGrant = useAccess((s) => (selected ? s.grants.get(selected.id) : undefined));
   // the countdown gate matters: grant expiry is passive, so without it the
   // Edit button would linger after the 30-minute window lapsed
@@ -272,29 +277,38 @@ function GalaxyLive() {
             {selected.ownerAvatar && <img src={selected.ownerAvatar} alt="" className="h-4 w-4 rounded-full" />}
             system @{selected.ownerHandle} · updated {selected.updatedAt.slice(0, 10)}
           </div>
-          <div className="mt-3 flex gap-2">
-            <button
-              className="btn-primary"
-              disabled={grafting}
-              onClick={async () => {
-                if (!navigator.onLine) {
-                  showToast("You're offline — reconnect to graft");
-                  return;
-                }
-                setGrafting(true);
-                try {
-                  const r = await graftItem(selected);
-                  if (r === "ok") showToast(`🌱 ${selected.name} grafted onto your tree`);
-                  else if (r === "no-local") showToast("No local .claude folder to graft into");
-                  else if (r === "no-content") showToast("This item has no content to graft yet");
-                  else showToast("Graft failed — try again");
-                } finally {
-                  setGrafting(false);
-                }
-              }}
-            >
-              {grafting ? "Grafting…" : "🌱 Graft onto my tree"}
-            </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {/* Your own item that's already on this machine → grafting would
+                just re-download your own file, so show a note instead. Your
+                item on a DIFFERENT machine → "Install" is genuinely useful. */}
+            {isOwn && alreadyLocal ? (
+              <span className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-[11px] text-emerald-300">
+                ✓ Your item — already on this tree
+              </span>
+            ) : (
+              <button
+                className="btn-primary"
+                disabled={grafting}
+                onClick={async () => {
+                  if (!navigator.onLine) {
+                    showToast("You're offline — reconnect to graft");
+                    return;
+                  }
+                  setGrafting(true);
+                  try {
+                    const r = await graftItem(selected);
+                    if (r === "ok") showToast(`🌱 ${selected.name} ${isOwn ? "installed on this machine" : "grafted onto your tree"}`);
+                    else if (r === "no-local") showToast("No local .claude folder to graft into");
+                    else if (r === "no-content") showToast("This item has no content to graft yet");
+                    else showToast("Graft failed — try again");
+                  } finally {
+                    setGrafting(false);
+                  }
+                }}
+              >
+                {grafting ? "Grafting…" : isOwn ? "⬇ Install to this machine" : "🌱 Graft onto my tree"}
+              </button>
+            )}
             <RequestChangesButton item={selected} />
             {canEdit && (
               <button

@@ -529,7 +529,10 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
     renderer.setSize(innerWidth, innerHeight);
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 400);
-    camera.position.z = 60;
+    // portrait/phone screens have a narrow horizontal FOV, which makes the
+    // scene read as "zoomed in" — pull the camera back so it frames wider
+    const camZ = () => (innerWidth < innerHeight ? 92 : innerWidth < 900 ? 74 : 60);
+    camera.position.z = camZ();
 
     function softTex(): THREE.CanvasTexture {
       const c = document.createElement("canvas");
@@ -775,6 +778,7 @@ const downloads = { version: r.version, windows: r.windows, mac: r.mac, linux: r
     });
     addEventListener("resize", () => {
       camera.aspect = innerWidth / innerHeight;
+      camera.position.z = camZ();
       camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight);
     });
