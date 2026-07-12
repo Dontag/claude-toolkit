@@ -21,6 +21,10 @@ const NOTE_TEXT: Record<string, (p: Record<string, unknown>) => string> = {
   request_denied: () => "Your change request was denied.",
   grant_revoked: () => "A write grant was revoked.",
   grant_expired: () => "A write window expired — control returned to the owner.",
+  // the requester who proposed the edit hears back from the owner
+  proposal_approved: () => "✅ The owner approved your proposed change — it's now live.",
+  proposal_rejected: () => "❌ The owner rejected your proposed change.",
+  proposal_pending: () => "✏️ Someone proposed a change to your item — review it above.",
 };
 
 const FIVE_DAYS = 5 * 864e5;
@@ -65,7 +69,9 @@ export function AccessCenter() {
   const incoming = useAccess((s) => s.incoming);
   const outgoing = useAccess((s) => s.outgoing);
   const notifications = useAccess((s) => s.notifications);
+  const grants = useAccess((s) => s.grants);
   const unread = useAccess((s) => s.unread);
+  const uid = session?.user.id;
   const proposals = useProposals((s) => s.pendingForMe);
   const showToast = useUi((s) => s.showToast);
   const [open, setOpen] = useState(false);
@@ -106,7 +112,7 @@ export function AccessCenter() {
         // Mobile: fixed to the viewport (right-anchored, viewport-fit width) so
         // it never gets cropped off the left edge. Desktop: dropdown under the
         // bell. Still a DOM child of the root, so click-outside keeps working.
-        <div className="hud-panel fixed right-2 top-14 z-50 max-h-[70vh] w-[min(20rem,calc(100vw-1rem))] overflow-y-auto p-3 sm:absolute sm:right-0 sm:top-10 sm:w-80">
+        <div className="hud-panel fixed right-2 top-14 z-50 max-h-[calc(100dvh-4.5rem)] w-[min(20rem,calc(100vw-1rem))] overflow-y-auto p-3 sm:absolute sm:right-0 sm:top-10 sm:max-h-[70vh] sm:w-80">
           <CollapsibleSection title="Requests for your items" total={incoming.length} threshold={5}>
             {incoming.map((r) => (
               <div key={r.id} className="rounded-lg border border-border bg-black/20 p-2">
@@ -172,27 +178,35 @@ export function AccessCenter() {
           </CollapsibleSection>
 
           <CollapsibleSection title="Your requests" total={recentOutgoing.length} threshold={5}>
-            {recentOutgoing.map((r) => (
-              <div key={r.id} className="flex items-center justify-between gap-2 text-[11px]">
-                <span className="min-w-0 truncate text-muted">{r.itemNames?.join(", ") || "item"}</span>
-                {r.status === "granted" && r.itemIds?.[0] ? (
-                  <button
-                    className="btn shrink-0 px-2 py-0.5 text-[10px] text-emerald-300"
-                    title="You have a write window — open the editor"
-                    onClick={() => {
-                      const id = r.itemIds![0]!;
-                      setOpen(false);
-                      useUi.getState().setTab("galaxy");
-                      requestGalaxyEdit(id);
-                    }}
-                  >
-                    ✏️ Edit
-                  </button>
-                ) : (
-                  <span className={`shrink-0 ${r.status === "granted" ? "text-emerald-300" : "text-muted"}`}>{r.status}</span>
-                )}
-              </div>
-            ))}
+            {recentOutgoing.map((r) => {
+              // Edit only when there is a LIVE write grant to me on this item
+              // (the grants map holds only unexpired grants). Request status
+              // "granted" persists after the 30-min window lapses, so it can't
+              // be the signal — otherwise every past grant would show Edit.
+              const itemId = r.itemIds?.[0];
+              const g = itemId ? grants.get(itemId) : undefined;
+              const canEditNow = !!g && g.granteeId === uid;
+              return (
+                <div key={r.id} className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="min-w-0 truncate text-muted">{r.itemNames?.join(", ") || "item"}</span>
+                  {canEditNow && itemId ? (
+                    <button
+                      className="btn shrink-0 px-2 py-0.5 text-[10px] text-emerald-300"
+                      title="You have a write window — open the editor"
+                      onClick={() => {
+                        setOpen(false);
+                        useUi.getState().setTab("galaxy");
+                        requestGalaxyEdit(itemId);
+                      }}
+                    >
+                      ✏️ Edit
+                    </button>
+                  ) : (
+                    <span className={`shrink-0 ${r.status === "granted" ? "text-emerald-300" : "text-muted"}`}>{r.status}</span>
+                  )}
+                </div>
+              );
+            })}
           </CollapsibleSection>
 
           {notificationsOn ? (

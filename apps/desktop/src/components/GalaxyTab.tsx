@@ -48,8 +48,9 @@ function RequestChangesButton({ item }: { item: GalaxyItem }) {
   );
 }
 
-/** Shows the live 30-minute grant countdown / padlock on the selected item. */
-function GrantStatus({ itemId }: { itemId: string }) {
+/** Live 30-min grant countdown / padlock on the selected item. When it's your
+ * write window, an Edit button lives here (so the action row above stays short). */
+function GrantStatus({ itemId, onEdit }: { itemId: string; onEdit?: () => void }) {
   const uid = useSession((s) => s.session?.user.id);
   const grant = useAccess((s) => s.grants.get(itemId));
   const ms = useCountdown(grant?.expiresAt);
@@ -57,12 +58,20 @@ function GrantStatus({ itemId }: { itemId: string }) {
   const mine = grant.granteeId === uid;
   return (
     <div
-      className={`mt-3 flex items-center justify-between rounded-lg border px-3 py-2 text-[11px] ${
+      className={`mt-3 flex items-center gap-2 rounded-lg border px-3 py-2 text-[11px] ${
         mine ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300" : "border-amber-400/40 bg-amber-400/10 text-amber-300"
       }`}
     >
-      <span>{mine ? "🔓 You have the write window" : "🔒 Locked by another editor"}</span>
-      <span className="font-mono">{fmtCountdown(ms)}</span>
+      <span className="min-w-0 flex-1 truncate">{mine ? "🔓 Write window" : "🔒 Locked by another editor"}</span>
+      <span className="shrink-0 font-mono">{fmtCountdown(ms)}</span>
+      {mine && onEdit && (
+        <button
+          className="shrink-0 rounded-md border border-emerald-400/50 bg-emerald-400/15 px-2 py-1 text-[11px] font-medium text-emerald-200 transition hover:bg-emerald-400/25"
+          onClick={onEdit}
+        >
+          ✏️ Edit
+        </button>
+      )}
     </div>
   );
 }
@@ -332,19 +341,20 @@ function GalaxyLive() {
               </AsyncButton>
             )}
             <RequestChangesButton item={selected} />
-            {canEdit && (
-              <button
-                className="btn flex-1 whitespace-nowrap text-[11px]"
-                onClick={() => {
-                  setDraft(content ?? "");
-                  setEditing(true);
-                }}
-              >
-                ✏️ Edit
-              </button>
-            )}
           </div>
-          <GrantStatus itemId={selected.id} />
+          {/* Edit lives in the write-window row (below) so this top row never
+              overflows / scrolls horizontally on a narrow phone. */}
+          <GrantStatus
+            itemId={selected.id}
+            onEdit={
+              canEdit && content !== null
+                ? () => {
+                    setDraft(content);
+                    setEditing(true);
+                  }
+                : undefined
+            }
+          />
           {loadingContent ? (
             <div className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-black/20 p-3 text-[11px] text-muted">
               <Spinner /> Loading content…
