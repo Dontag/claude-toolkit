@@ -16,6 +16,7 @@ export interface ChangeRequest {
   createdAt: string;
   requesterHandle?: string;
   itemNames?: string[];
+  itemIds?: string[];
 }
 
 export interface ActiveGrant {
@@ -112,7 +113,7 @@ export async function refreshAccess(): Promise<void> {
   const [{ data: reqs }, { data: grants }, { data: notes }] = await Promise.all([
     supabase
       .from("change_requests")
-      .select("id, requester_id, owner_id, toolkit_id, message, status, created_at, profiles!change_requests_requester_id_fkey(handle), change_request_items(toolkit_items(name))")
+      .select("id, requester_id, owner_id, toolkit_id, message, status, created_at, profiles!change_requests_requester_id_fkey(handle), change_request_items(item_id, toolkit_items(name))")
       .in("status", ["pending", "granted"])
       .order("created_at", { ascending: false }),
     supabase.from("access_grants").select("id, item_id, grantee_id, granted_by, expires_at").is("revoked_at", null),
@@ -131,6 +132,7 @@ export async function refreshAccess(): Promise<void> {
     itemNames: ((r.change_request_items as Array<{ toolkit_items: { name: string } }>) ?? []).map(
       (ci) => ci.toolkit_items.name,
     ),
+    itemIds: ((r.change_request_items as Array<{ item_id: string }>) ?? []).map((ci) => ci.item_id),
   });
 
   const all = (reqs ?? []).map(mapReq);

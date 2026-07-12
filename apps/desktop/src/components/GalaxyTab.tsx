@@ -17,13 +17,10 @@ import { Modal } from "./Modal";
 // palette for core kinds, hash-stable colors for anything new (plugins, …)
 import { kindColorHex } from "../lib/kind-color";
 import { Spinner } from "./Spinner";
+import { AsyncButton } from "./AsyncButton";
+import { galaxySearchRef, galaxyResetRef, galaxyEditRef, takeQueuedGalaxyEdit } from "./galaxyBridge";
 
 const Editor = lazy(() => import("./Editor").then((m) => ({ default: m.Editor })));
-
-/** Imperative hook so the header search box can drive the Galaxy tab. */
-export const galaxySearchRef: { current: ((q: string) => void) | null } = { current: null };
-/** Reset the galaxy view (deselect + camera back to default). Driven by the header's ✕. */
-export const galaxyResetRef: { current: (() => void) | null } = { current: null };
 
 /** "Request changes" on someone else's item (hidden on your own). */
 function RequestChangesButton({ item }: { item: GalaxyItem }) {
@@ -31,8 +28,8 @@ function RequestChangesButton({ item }: { item: GalaxyItem }) {
   const showToast = useUi((s) => s.showToast);
   if (!uid || item.ownerId === uid) return null;
   return (
-    <button
-      className="btn"
+    <AsyncButton
+      className="btn flex-1 whitespace-nowrap text-[11px]"
       onClick={async () => {
         const ok = await confirm({
           title: `Request edit access to "${item.name}"?`,
@@ -47,7 +44,7 @@ function RequestChangesButton({ item }: { item: GalaxyItem }) {
       }}
     >
       ✋ Request changes
-    </button>
+    </AsyncButton>
   );
 }
 
@@ -83,8 +80,8 @@ function GalaxyLive() {
   const [selected, setSelected] = useState<GalaxyItem | null>(null);
   const [content, setContent] = useState<string | null>(null);
   const [loadingContent, setLoadingContent] = useState(false);
-  const [grafting, setGrafting] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [autoEdit, setAutoEdit] = useState(false);
   const [draft, setDraft] = useState("");
   const uid = useSession((s) => s.session?.user.id);
   const shared = usePublish((s) => s.shared);
@@ -168,6 +165,21 @@ function GalaxyLive() {
       setSelected(null);
       scene.resetView();
     };
+    galaxyEditRef.current = (itemId) => {
+      const it = useGalaxy.getState().items.find((i) => i.id === itemId);
+      if (!it) {
+        useUi.getState().showToast("That item isn't in the galaxy anymore");
+        return;
+      }
+      scene.focusItemById(itemId);
+      setSelected(it);
+      setAutoEdit(true); // the editor opens once content loads + the grant is confirmed
+    };
+    const queued = takeQueuedGalaxyEdit();
+    if (queued) {
+      // defer a tick so the store/subscriptions are wired before we select
+      setTimeout(() => galaxyEditRef.current?.(queued), 0);
+    }
     void fetchGalaxy();
     subscribeGalaxy();
     joinGalaxyPresence();
@@ -194,6 +206,7 @@ function GalaxyLive() {
       unsubNav();
       galaxySearchRef.current = null;
       galaxyResetRef.current = null;
+      galaxyEditRef.current = null;
       sceneRef.current = null;
       scene.dispose();
     };
@@ -217,6 +230,20 @@ function GalaxyLive() {
     };
     // re-fetch when a realtime update moves the item's current version
   }, [selected?.id, selected?.currentVersionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "Edit" from the notification center: once the item's content has loaded and
+  // the write grant is confirmed, drop straight into the propose editor.
+  useEffect(() => {
+    if (!autoEdit) return;
+    if (content === null) return; // still loading
+    if (canEdit) {
+      setDraft(content);
+      setEditing(true);
+    } else {
+      useUi.getState().showToast("Your edit window isn't open on this item");
+    }
+    setAutoEdit(false);
+  }, [autoEdit, content, canEdit]);
 
   return (
     <div className="relative h-full">
@@ -277,48 +304,43 @@ function GalaxyLive() {
             {selected.ownerAvatar && <img src={selected.ownerAvatar} alt="" className="h-4 w-4 rounded-full" />}
             system @{selected.ownerHandle} · updated {selected.updatedAt.slice(0, 10)}
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
+          {/* actions in one row (nowrap) on every screen size */}
+          <div className="mt-3 flex gap-2">
             {/* Your own item that's already on this machine → grafting would
                 just re-download your own file, so show a note instead. Your
                 item on a DIFFERENT machine → "Install" is genuinely useful. */}
             {isOwn && alreadyLocal ? (
-              <span className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-[11px] text-emerald-300">
-                ✓ Your item — already on this tree
+              <span className="flex-1 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-center text-[11px] text-emerald-300">
+                ✓ Your item — already here
               </span>
             ) : (
-              <button
-                className="btn-primary"
-                disabled={grafting}
+              <AsyncButton
+                className="btn-primary flex-1 whitespace-nowrap text-[11px]"
                 onClick={async () => {
                   if (!navigator.onLine) {
                     showToast("You're offline — reconnect to graft");
                     return;
                   }
-                  setGrafting(true);
-                  try {
-                    const r = await graftItem(selected);
-                    if (r === "ok") showToast(`🌱 ${selected.name} ${isOwn ? "installed on this machine" : "grafted onto your tree"}`);
-                    else if (r === "no-local") showToast("No local .claude folder to graft into");
-                    else if (r === "no-content") showToast("This item has no content to graft yet");
-                    else showToast("Graft failed — try again");
-                  } finally {
-                    setGrafting(false);
-                  }
+                  const r = await graftItem(selected);
+                  if (r === "ok") showToast(`🌱 ${selected.name} ${isOwn ? "installed on this machine" : "grafted onto your tree"}`);
+                  else if (r === "no-local") showToast("No local .claude folder to graft into");
+                  else if (r === "no-content") showToast("This item has no content to graft yet");
+                  else showToast("Graft failed — try again");
                 }}
               >
-                {grafting ? "Grafting…" : isOwn ? "⬇ Install to this machine" : "🌱 Graft onto my tree"}
-              </button>
+                {isOwn ? "⬇ Install here" : "🌱 Graft onto my tree"}
+              </AsyncButton>
             )}
             <RequestChangesButton item={selected} />
             {canEdit && (
               <button
-                className="btn"
+                className="btn flex-1 whitespace-nowrap text-[11px]"
                 onClick={() => {
                   setDraft(content ?? "");
                   setEditing(true);
                 }}
               >
-                ✏️ Edit (propose)
+                ✏️ Edit
               </button>
             )}
           </div>
@@ -427,9 +449,9 @@ function ProposeModal({
             <span className="ml-2 text-[11px] text-amber-300">the owner must approve before it goes live</span>
           </div>
           <div className="flex gap-2">
-            <button className="btn-primary" disabled={!canSubmit} onClick={() => void submit()} title="Ctrl+Enter">
+            <AsyncButton className="btn-primary" disabled={!canSubmit} onClick={submit} title="Ctrl+Enter">
               📨 Submit proposal
-            </button>
+            </AsyncButton>
             <button className="btn" onClick={() => void cancel()}>
               Cancel
             </button>

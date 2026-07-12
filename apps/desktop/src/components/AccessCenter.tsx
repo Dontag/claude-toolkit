@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { galaxyConfigured } from "../lib/supabase";
 import { useClickOutside } from "../lib/useClickOutside";
 import { Modal } from "./Modal";
+import { AsyncButton } from "./AsyncButton";
 import { useSession } from "../stores/session";
 import { useSettings } from "../lib/settings";
 import { useUi } from "../stores/ui";
@@ -13,6 +14,7 @@ import {
   type AppNotification,
 } from "../lib/access";
 import { approveProposal, rejectProposal, useProposals, type Proposal } from "../lib/proposals";
+import { requestGalaxyEdit } from "./galaxyBridge";
 
 const NOTE_TEXT: Record<string, (p: Record<string, unknown>) => string> = {
   grant_opened: () => "Your change request was granted — you have a 30-minute write window.",
@@ -20,6 +22,42 @@ const NOTE_TEXT: Record<string, (p: Record<string, unknown>) => string> = {
   grant_revoked: () => "A write grant was revoked.",
   grant_expired: () => "A write window expired — control returned to the owner.",
 };
+
+const FIVE_DAYS = 5 * 864e5;
+const within5Days = (iso: string) => Date.now() - new Date(iso).getTime() < FIVE_DAYS;
+
+/** A titled section that collapses behind a count when it grows past `threshold`. */
+function CollapsibleSection({
+  title,
+  total,
+  threshold,
+  children,
+}: {
+  title: string;
+  total: number;
+  threshold: number;
+  children: ReactNode;
+}) {
+  const collapsible = total > threshold;
+  const [expanded, setExpanded] = useState(false);
+  const open = !collapsible || expanded;
+  if (total === 0) return null;
+  return (
+    <section className="mb-3">
+      <button
+        className="mb-1 flex w-full items-center justify-between text-left hud-label disabled:cursor-default"
+        onClick={() => collapsible && setExpanded((o) => !o)}
+        disabled={!collapsible}
+      >
+        <span>
+          {title} <span className="text-muted">({total})</span>
+        </span>
+        {collapsible && <span className="text-[10px] text-brand2">{expanded ? "▾ hide" : "▸ show all"}</span>}
+      </button>
+      {open && <div className="max-h-60 space-y-1 overflow-y-auto pr-0.5">{children}</div>}
+    </section>
+  );
+}
 
 export function AccessCenter() {
   const session = useSession((s) => s.session);
@@ -45,6 +83,9 @@ export function AccessCenter() {
   if (!galaxyConfigured || !session) return null;
   const pending = incoming.length + proposals.length;
   const badge = pending + (notificationsOn ? unread : 0);
+  // time-based sections are capped to the last 5 days
+  const recentOutgoing = outgoing.filter((r) => within5Days(r.createdAt));
+  const recentNotes = notifications.filter((n) => within5Days(n.createdAt));
 
   return (
     <div className="relative" ref={rootRef}>
@@ -66,101 +107,106 @@ export function AccessCenter() {
         // it never gets cropped off the left edge. Desktop: dropdown under the
         // bell. Still a DOM child of the root, so click-outside keeps working.
         <div className="hud-panel fixed right-2 top-14 z-50 max-h-[70vh] w-[min(20rem,calc(100vw-1rem))] overflow-y-auto p-3 sm:absolute sm:right-0 sm:top-10 sm:w-80">
-          {pending > 0 && (
-            <section className="mb-3">
-              <div className="hud-label mb-1">Requests for your items</div>
-              {incoming.map((r) => (
-                <div key={r.id} className="mb-2 rounded-lg border border-border bg-black/20 p-2">
-                  <div className="text-xs">
-                    <strong>@{r.requesterHandle ?? "someone"}</strong> wants to edit{" "}
-                    <span className="text-brand2">{r.itemNames?.join(", ") || "an item"}</span>
-                  </div>
-                  {r.message && <p className="mt-1 text-[11px] text-muted">“{r.message}”</p>}
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      className="btn-primary text-[11px]"
-                      onClick={async () => {
-                        if (await grantRequest(r.id)) showToast("✅ Granted — 30-minute window opened");
-                        else showToast("Couldn't grant — an item may already be under a grant");
-                      }}
-                    >
-                      Grant 30 min
-                    </button>
-                    <button
-                      className="btn text-[11px]"
-                      onClick={async () => {
-                        if (await denyRequest(r.id)) showToast("Request denied");
-                      }}
-                    >
-                      Deny
-                    </button>
-                  </div>
+          <CollapsibleSection title="Requests for your items" total={incoming.length} threshold={5}>
+            {incoming.map((r) => (
+              <div key={r.id} className="rounded-lg border border-border bg-black/20 p-2">
+                <div className="text-xs">
+                  <strong>@{r.requesterHandle ?? "someone"}</strong> wants to edit{" "}
+                  <span className="text-brand2">{r.itemNames?.join(", ") || "an item"}</span>
                 </div>
-              ))}
-            </section>
-          )}
+                {r.message && <p className="mt-1 text-[11px] text-muted">“{r.message}”</p>}
+                <div className="mt-2 flex gap-2">
+                  <AsyncButton
+                    className="btn-primary text-[11px]"
+                    onClick={async () => {
+                      if (await grantRequest(r.id)) showToast("✅ Granted — 30-minute window opened");
+                      else showToast("Couldn't grant — an item may already be under a grant");
+                    }}
+                  >
+                    Grant 30 min
+                  </AsyncButton>
+                  <AsyncButton
+                    className="btn text-[11px]"
+                    onClick={async () => {
+                      if (await denyRequest(r.id)) showToast("Request denied");
+                    }}
+                  >
+                    Deny
+                  </AsyncButton>
+                </div>
+              </div>
+            ))}
+          </CollapsibleSection>
 
-          {proposals.length > 0 && (
-            <section className="mb-3">
-              <div className="hud-label mb-1">Changes awaiting your approval</div>
-              {proposals.map((p) => (
-                <div key={p.id} className="mb-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-2">
-                  <div className="text-xs">
-                    <strong>@{p.proposerHandle ?? "someone"}</strong> edited{" "}
-                    <span className="text-brand2">{p.itemName}</span>
-                  </div>
-                  <div className="mt-2 flex gap-2">
-                    <button className="btn text-[11px]" onClick={() => setReview(p)}>
-                      Review
-                    </button>
-                    <button
-                      className="btn-primary text-[11px]"
-                      onClick={async () => {
-                        if (await approveProposal(p)) showToast(`✅ Applied — ${p.itemName} updated`);
-                        else showToast("Couldn't approve");
-                      }}
-                    >
-                      Approve
-                    </button>
-                    <button
-                      className="btn-danger text-[11px]"
-                      onClick={async () => {
-                        if (await rejectProposal(p.id)) showToast("Proposal rejected");
-                      }}
-                    >
-                      Reject
-                    </button>
-                  </div>
+          <CollapsibleSection title="Changes awaiting your approval" total={proposals.length} threshold={5}>
+            {proposals.map((p) => (
+              <div key={p.id} className="rounded-lg border border-amber-400/40 bg-amber-400/10 p-2">
+                <div className="text-xs">
+                  <strong>@{p.proposerHandle ?? "someone"}</strong> edited{" "}
+                  <span className="text-brand2">{p.itemName}</span>
                 </div>
-              ))}
-            </section>
-          )}
+                <div className="mt-2 flex gap-2">
+                  <button className="btn text-[11px]" onClick={() => setReview(p)}>
+                    Review
+                  </button>
+                  <AsyncButton
+                    className="btn-primary text-[11px]"
+                    onClick={async () => {
+                      if (await approveProposal(p)) showToast(`✅ Applied — ${p.itemName} updated`);
+                      else showToast("Couldn't approve");
+                    }}
+                  >
+                    Approve
+                  </AsyncButton>
+                  <AsyncButton
+                    className="btn-danger text-[11px]"
+                    onClick={async () => {
+                      if (await rejectProposal(p.id)) showToast("Proposal rejected");
+                    }}
+                  >
+                    Reject
+                  </AsyncButton>
+                </div>
+              </div>
+            ))}
+          </CollapsibleSection>
 
-          {outgoing.length > 0 && (
-            <section className="mb-3">
-              <div className="hud-label mb-1">Your requests</div>
-              {outgoing.slice(0, 5).map((r) => (
-                <div key={r.id} className="mb-1 flex items-center justify-between text-[11px]">
-                  <span className="text-muted">{r.itemNames?.join(", ") || "item"}</span>
-                  <span className={r.status === "granted" ? "text-emerald-300" : "text-muted"}>{r.status}</span>
-                </div>
-              ))}
-            </section>
-          )}
+          <CollapsibleSection title="Your requests" total={recentOutgoing.length} threshold={5}>
+            {recentOutgoing.map((r) => (
+              <div key={r.id} className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="min-w-0 truncate text-muted">{r.itemNames?.join(", ") || "item"}</span>
+                {r.status === "granted" && r.itemIds?.[0] ? (
+                  <button
+                    className="btn shrink-0 px-2 py-0.5 text-[10px] text-emerald-300"
+                    title="You have a write window — open the editor"
+                    onClick={() => {
+                      const id = r.itemIds![0]!;
+                      setOpen(false);
+                      useUi.getState().setTab("galaxy");
+                      requestGalaxyEdit(id);
+                    }}
+                  >
+                    ✏️ Edit
+                  </button>
+                ) : (
+                  <span className={`shrink-0 ${r.status === "granted" ? "text-emerald-300" : "text-muted"}`}>{r.status}</span>
+                )}
+              </div>
+            ))}
+          </CollapsibleSection>
 
           {notificationsOn ? (
-            <>
-              <div className="hud-label mb-1">Activity</div>
-              {notifications.length === 0 ? (
-                <p className="text-[11px] text-muted">Nothing yet.</p>
-              ) : (
-                notifications.slice(0, 20).map((n: AppNotification) => (
-                  <div key={n.id} className="mb-1 text-[11px] text-muted">
+            recentNotes.length === 0 && pending === 0 && recentOutgoing.length === 0 ? (
+              <p className="text-[11px] text-muted">Nothing yet.</p>
+            ) : (
+              <CollapsibleSection title="Activity · last 5 days" total={recentNotes.length} threshold={10}>
+                {recentNotes.map((n: AppNotification) => (
+                  <div key={n.id} className="text-[11px] text-muted">
                     {(NOTE_TEXT[n.type] ?? (() => n.type))(n.payload)}
                   </div>
-                ))
-              )}
-            </>
+                ))}
+              </CollapsibleSection>
+            )
           ) : (
             pending === 0 && <p className="text-[11px] text-muted">Notifications are off — requests still appear here.</p>
           )}
@@ -185,7 +231,7 @@ export function AccessCenter() {
               {review.content}
             </pre>
             <div className="mt-3 flex justify-end gap-2">
-              <button
+              <AsyncButton
                 className="btn-danger"
                 onClick={async () => {
                   if (await rejectProposal(review.id)) showToast("Proposal rejected");
@@ -193,8 +239,8 @@ export function AccessCenter() {
                 }}
               >
                 Reject
-              </button>
-              <button
+              </AsyncButton>
+              <AsyncButton
                 className="btn-primary"
                 onClick={async () => {
                   if (await approveProposal(review)) showToast(`✅ Applied — ${review.itemName} updated`);
@@ -203,7 +249,7 @@ export function AccessCenter() {
                 }}
               >
                 Approve — replace my {review.itemName}
-              </button>
+              </AsyncButton>
             </div>
         </Modal>
       )}

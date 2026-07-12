@@ -29,7 +29,7 @@ import { fetchGalaxy } from "./lib/galaxy";
 import { IS_WEB } from "./lib/platform";
 import { checkForUpdates } from "./updater";
 import LOGO from "./assets/logo.svg";
-import { galaxySearchRef, galaxyResetRef } from "./components/GalaxyTab";
+import { galaxySearchRef, galaxyResetRef } from "./components/galaxyBridge";
 import { FreeLockControl } from "./components/FreeLockControl";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { useSession } from "./stores/session";
