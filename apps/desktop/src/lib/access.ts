@@ -74,11 +74,14 @@ async function toolkitOf(item: GalaxyItem): Promise<string> {
   return data!.toolkit_id as string;
 }
 
-export async function grantRequest(requestId: string): Promise<boolean> {
-  if (!supabase) return false;
+/** Grant a 30-min window. Returns {ok:false, message} with the server's reason
+ * so the UI can distinguish "genuinely locked" from a real failure. */
+export async function grantRequest(requestId: string): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "No backend" };
   const { error } = await supabase.rpc("grant_change_request", { p_request: requestId });
-  if (!error) await refreshAccess();
-  return !error;
+  if (error) return { ok: false, message: error.message };
+  await refreshAccess();
+  return { ok: true };
 }
 export async function denyRequest(requestId: string): Promise<boolean> {
   if (!supabase) return false;

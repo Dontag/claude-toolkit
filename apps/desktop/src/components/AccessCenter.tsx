@@ -125,8 +125,11 @@ export function AccessCenter() {
                   <AsyncButton
                     className="btn-primary text-[11px]"
                     onClick={async () => {
-                      if (await grantRequest(r.id)) showToast("✅ Granted — 30-minute window opened");
-                      else showToast("Couldn't grant — an item may already be under a grant");
+                      const res = await grantRequest(r.id);
+                      if (res.ok) showToast("✅ Granted — 30-minute window opened");
+                      else if (res.message?.includes("active grant"))
+                        showToast("That item is being edited right now — try again once the window ends");
+                      else showToast(`Couldn't grant — ${res.message ?? "try again"}`);
                     }}
                   >
                     Grant 30 min
