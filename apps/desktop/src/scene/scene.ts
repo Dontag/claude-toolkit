@@ -80,6 +80,8 @@ export class SkillTreeScene {
   private falling: FallingFruit[] = [];
   private trunkCurve!: THREE.CatmullRomCurve3;
   private trunkMat!: THREE.MeshStandardMaterial;
+  private trunkGroup = new THREE.Group(); // vertical trunk, rebuilt to grow taller
+  private treeTopY = 6.2; // current crown height (grows with item count)
   private canopy = new THREE.Group(); // branches + foliage + labels + hit spheres, rebuilt on change
   private clusterHit = new Map<ItemKind, THREE.Mesh[]>();
   private clusterLabels = new Map<ItemKind, THREE.Sprite>();
@@ -102,6 +104,9 @@ export class SkillTreeScene {
   private lookTarget = new THREE.Vector3(0, 4.4, 0);
   private focusedCat: ItemKind | null = null;
   private freeNav = false;
+  private baseLookY = 4.4; // default camera pivot / pull-back, scaled to tree height
+  private baseDist = 17;
+  private framedTopY = -1; // last height we reframed at (avoid yanking zoom on every rebuild)
 
   /** Center-lock off → drag pans, idle auto-spin stops (free navigation). */
   setFreeNavigation(on: boolean) {
@@ -151,6 +156,7 @@ export class SkillTreeScene {
     this.scene.add(this.galaxy.group);
 
     this.buildStatics();
+    this.world.add(this.trunkGroup);
     this.world.add(this.fruitGroup);
     this.world.add(this.canopy);
     this.rebuild();
@@ -222,27 +228,9 @@ export class SkillTreeScene {
     this.fliesBaseY = pos.slice();
     this.world.add(this.flies);
 
-    // trunk
+    // trunk material — the trunk mesh itself is (re)built to the tree's current
+    // height in buildTrunk(); the roots below flare from the base and are static
     this.trunkMat = new THREE.MeshStandardMaterial({ color: 0x3a416b, roughness: 0.85, metalness: 0 });
-    this.trunkCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0, -0.1, 0),
-      new THREE.Vector3(0.45, 1.0, 0.15),
-      new THREE.Vector3(-0.35, 2.1, -0.2),
-      new THREE.Vector3(0.35, 3.2, 0.25),
-      new THREE.Vector3(-0.1, 4.3, -0.1),
-      new THREE.Vector3(0.1, 5.2, 0.05),
-    ]);
-    (
-      [
-        [0, 0.45, 0.42],
-        [0.33, 0.66, 0.3],
-        [0.66, 1.0, 0.18],
-      ] as const
-    ).forEach(([a, b, radius]) => {
-      const pts: THREE.Vector3[] = [];
-      for (let i = 0; i <= 10; i++) pts.push(this.trunkCurve.getPoint(a + ((b - a) * i) / 10));
-      this.world.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 20, radius, 9), this.trunkMat));
-    });
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2 + 0.3;
       const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
@@ -316,9 +304,8 @@ export class SkillTreeScene {
         life: 0,
       });
     }
-    // rebuild canopy after the fall starts so cluster sizes shrink
-    this.rebuildCanopy();
-    this.layoutFruits();
+    // regrow the tree after the fall starts so branch/trunk sizes shrink back
+    this.rebuild();
   }
 
   focusItem(id: string) {
@@ -341,8 +328,8 @@ export class SkillTreeScene {
 
   resetView() {
     this.focusedCat = null;
-    this.lookTarget.set(0, 4.4, 0);
-    this.targetDist = 17;
+    this.lookTarget.set(0, this.baseLookY, 0);
+    this.targetDist = this.baseDist;
     this.targetPhi = 1.22;
     this.cb.onClusterFocused?.(null);
   }
@@ -366,38 +353,28 @@ export class SkillTreeScene {
 
   private computeClusters() {
     const CAP = SkillTreeScene.SUB_CAP;
-    const BASE: Record<ItemKind, THREE.Vector3> = {
-      skill: new THREE.Vector3(2.6, 6.4, 0.6),
-      agent: new THREE.Vector3(-2.4, 6.0, 1.4),
-      hook: new THREE.Vector3(-1.2, 7.4, -2.0),
-      command: new THREE.Vector3(1.4, 5.2, -2.2),
-    };
-    const GOLDEN = 2.399963229728653;
+    const LEVEL_H = 1.55; // vertical gap between successive overflow branch levels
+    const BASE_Y = 4.6; // height of the first (bottom) ring of branches
+    const SECTOR = (Math.PI * 2) / CATS.length;
     this.cluster = {} as typeof this.cluster;
+    let maxLevel = 0;
     CATS.forEach((cat, ci) => {
       const count = this.catCount(cat);
       const nSubs = Math.max(1, Math.ceil(count / CAP));
+      maxLevel = Math.max(maxLevel, nSubs - 1);
       const subs: Array<{ center: THREE.Vector3; R: number; count: number }> = [];
-      const base = BASE[cat];
-      // outward direction so overflow branches grow away from the trunk
-      const out = base.clone().setY(0).normalize();
       for (let s = 0; s < nSubs; s++) {
         const subCount = Math.max(1, Math.min(CAP, count - s * CAP));
-        const R = Math.min(2.2, Math.max(1.0, 0.8 + 0.45 * Math.sqrt(subCount)));
-        if (s === 0) {
-          subs.push({ center: base.clone(), R, count: subCount });
-        } else {
-          // deterministic golden-angle ring around the parent, biased outward
-          const ang = s * GOLDEN + ci * 1.7;
-          const ring = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang));
-          const dir = ring.multiplyScalar(0.8).add(out.clone().multiplyScalar(0.7)).normalize();
-          const prev = subs[0]!;
-          const center = prev.center
-            .clone()
-            .add(dir.multiplyScalar(prev.R + R * 0.85))
-            .add(new THREE.Vector3(0, (s % 2 === 0 ? -0.5 : 0.7) + 0.2 * (s % 3), 0));
-          subs.push({ center, R, count: subCount });
-        }
+        const R = Math.min(2.0, Math.max(0.95, 0.72 + 0.42 * Math.sqrt(subCount)));
+        // each kind owns an angular sector around the trunk. The first branch
+        // fills the bottom ring (width is "covered" by the 4 kinds). Once a kind
+        // passes CAP items, the overflow starts a FRESH branch that spirals a
+        // little and rises a level — so the tree grows UP as well as OUT, like
+        // real branch growth, instead of cramming into one spot.
+        const angle = ci * SECTOR + 0.5 + s * 0.5;
+        const rad = 2.5 + s * 0.3 + R * 0.12;
+        const y = BASE_Y + s * LEVEL_H + (ci % 2) * 0.35;
+        subs.push({ center: new THREE.Vector3(Math.cos(angle) * rad, y, Math.sin(angle) * rad), R, count: subCount });
       }
       // bounding radius over all subs → camera focus frames the whole family
       const c0 = subs[0]!.center;
@@ -405,6 +382,51 @@ export class SkillTreeScene {
       for (const sub of subs) bound = Math.max(bound, c0.distanceTo(sub.center) + sub.R);
       this.cluster[cat] = { center: c0, R: bound, subs };
     });
+    this.treeTopY = BASE_Y + maxLevel * LEVEL_H + 1.2;
+  }
+
+  /** (Re)build the vertical trunk, stretched to the tree's current height. The
+   * hand-authored 6-point shape is scaled up in Y so the trunk keeps its gentle
+   * sway while getting taller as more branches stack above. */
+  private buildTrunk() {
+    this.disposeGroup(this.trunkGroup);
+    const H = 5.2; // the authored shape's native height
+    const top = this.treeTopY;
+    const shape: Array<[number, number, number]> = [
+      [0, -0.1, 0],
+      [0.45, 1.0, 0.15],
+      [-0.35, 2.1, -0.2],
+      [0.35, 3.2, 0.25],
+      [-0.1, 4.3, -0.1],
+      [0.1, 5.2, 0.05],
+    ];
+    const pts = shape.map(([x, y, z]) => new THREE.Vector3(x, ((y + 0.1) / (H + 0.1)) * (top + 0.1) - 0.1, z));
+    this.trunkCurve = new THREE.CatmullRomCurve3(pts);
+    (
+      [
+        [0, 0.45, 0.42],
+        [0.33, 0.66, 0.3],
+        [0.66, 1.0, 0.18],
+      ] as const
+    ).forEach(([a, b, radius]) => {
+      const seg: THREE.Vector3[] = [];
+      for (let i = 0; i <= 14; i++) seg.push(this.trunkCurve.getPoint(a + ((b - a) * i) / 14));
+      this.trunkGroup.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(seg), 26, radius, 9), this.trunkMat));
+    });
+  }
+
+  /** Scale the camera pull-back to the tree height so a tall tree stays framed. */
+  private frameTree() {
+    this.baseLookY = this.treeTopY * 0.48 + 0.6;
+    this.baseDist = Math.max(15, 8 + this.treeTopY * 1.2);
+    // only pull the live view when the tree actually changed height (not on every
+    // add/remove) and the user isn't focused on a cluster or free-flying
+    const grew = Math.abs(this.treeTopY - this.framedTopY) > 0.01;
+    this.framedTopY = this.treeTopY;
+    if (grew && !this.focusedCat && !this.freeNav) {
+      this.lookTarget.y = this.baseLookY;
+      this.targetDist = this.baseDist;
+    }
   }
 
   private disposeGroup(group: THREE.Group) {
@@ -424,7 +446,6 @@ export class SkillTreeScene {
   }
 
   private rebuildCanopy() {
-    this.computeClusters();
     this.disposeGroup(this.canopy);
     this.clusterHit.clear();
     this.clusterLabels.clear();
@@ -435,11 +456,14 @@ export class SkillTreeScene {
 
       subs.forEach((sub, si) => {
         const { center, R, count } = sub;
-        // sub 0 branches from the trunk; overflow sub-branches fork off the parent cluster
-        const start = si === 0 ? this.trunkCurve.getPoint(0.55 + ci * 0.13) : subs[0]!.center.clone();
-        const mid = start.clone().lerp(center, 0.5).add(new THREE.Vector3(0, si === 0 ? 0.6 : 0.35, 0));
+        // every branch forks straight off the TRUNK at a height matching its
+        // level, so overflow branches emerge higher up the trunk — the tree
+        // reads as growing upward rather than sprouting from one another
+        const attachT = Math.max(0.14, Math.min(0.97, (center.y - 0.8 + 0.1) / this.treeTopY));
+        const start = this.trunkCurve.getPoint(attachT);
+        const mid = start.clone().lerp(center, 0.5).add(new THREE.Vector3(0, 0.5, 0));
         const bc = new THREE.QuadraticBezierCurve3(start, mid, center.clone().sub(new THREE.Vector3(0, R * 0.4, 0)));
-        const branchR = Math.min(0.22, 0.08 + 0.015 * count) * (si === 0 ? 1 : 0.8);
+        const branchR = Math.min(0.22, 0.08 + 0.015 * count) * (si === 0 ? 1 : 0.82);
         this.canopy.add(new THREE.Mesh(new THREE.TubeGeometry(bc, 16, branchR, 8), this.trunkMat));
         const rndT = rand(500 + ci * 31 + si * 17);
         for (let k = 0; k < (si === 0 ? 3 : 2); k++) {
@@ -590,8 +614,11 @@ export class SkillTreeScene {
   }
 
   private rebuild(growId?: string) {
+    this.computeClusters(); // sets cluster layout + treeTopY
+    this.buildTrunk(); // grow the trunk to the new height (also sets trunkCurve)
     this.rebuildCanopy();
     this.layoutFruits(growId);
+    this.frameTree();
   }
 
   /* ── Labels ── */
@@ -648,7 +675,7 @@ export class SkillTreeScene {
       if (ptrs.size === 2) {
         const [a, b] = [...ptrs.values()];
         const d = Math.hypot(a![0] - b![0], a![1] - b![1]);
-        if (pinchDist > 0 && d > 0) this.targetDist = Math.min(38, Math.max(3.2, this.targetDist * (pinchDist / d)));
+        if (pinchDist > 0 && d > 0) this.targetDist = Math.min(60, Math.max(3.2, this.targetDist * (pinchDist / d)));
         pinchDist = d;
         this.lastInteract = performance.now();
       } else if (panning) {
@@ -682,7 +709,7 @@ export class SkillTreeScene {
     };
     const onContext = (e: Event) => this.freeNav && e.preventDefault();
     const onWheel = (e: WheelEvent) => {
-      this.targetDist = Math.min(38, Math.max(3.2, this.targetDist + e.deltaY * 0.012));
+      this.targetDist = Math.min(60, Math.max(3.2, this.targetDist + e.deltaY * 0.012));
       this.lastInteract = performance.now();
     };
     const onClick = (e: MouseEvent) => {
