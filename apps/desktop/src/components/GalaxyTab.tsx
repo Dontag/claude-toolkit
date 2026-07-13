@@ -19,6 +19,7 @@ import { kindColorHex } from "../lib/kind-color";
 import { Spinner } from "./Spinner";
 import { AsyncButton } from "./AsyncButton";
 import { galaxySearchRef, galaxyResetRef, galaxyEditRef, takeQueuedGalaxyEdit } from "./galaxyBridge";
+import { IS_WEB } from "../lib/platform";
 
 const Editor = lazy(() => import("./Editor").then((m) => ({ default: m.Editor })));
 
@@ -256,6 +257,19 @@ function GalaxyLive() {
     setAutoEdit(false);
   }, [autoEdit, content, canEdit]);
 
+  const graftSelected = async () => {
+    if (!selected) return;
+    if (!navigator.onLine) {
+      showToast("You're offline — reconnect to graft");
+      return;
+    }
+    const r = await graftItem(selected);
+    if (r === "ok") showToast(`🌱 ${selected.name} ${isOwn ? "installed on this machine" : "grafted onto your tree"}`);
+    else if (r === "no-local") showToast("No local .claude folder to graft into");
+    else if (r === "no-content") showToast("This item has no content to graft yet");
+    else showToast("Graft failed — try again");
+  };
+
   return (
     <div className="relative h-full">
       <div ref={ref} className="absolute inset-0 cursor-grab" />
@@ -317,29 +331,28 @@ function GalaxyLive() {
           </div>
           {/* actions in one row (nowrap) on every screen size */}
           <div className="mt-3 flex gap-2">
-            {/* Your own item that's already on this machine → grafting would
-                just re-download your own file, so show a note instead. Your
-                item on a DIFFERENT machine → "Install" is genuinely useful. */}
-            {isOwn && alreadyLocal ? (
-              <span className="flex-1 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-center text-[11px] text-emerald-300">
-                ✓ Your item — already here
-              </span>
+            {isOwn ? (
+              // It's YOUR item — never a green "graft" CTA (that would just
+              // re-download your own file). Just a note. Install shows only as a
+              // small secondary action when the item is genuinely missing on
+              // THIS machine (e.g. a second computer) — never on web (no local FS).
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <span className="min-w-0 flex-1 truncate rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-center text-[11px] text-emerald-300">
+                  ✓ Your own item{alreadyLocal ? " — already here" : ""}
+                </span>
+                {!alreadyLocal && !IS_WEB && (
+                  <AsyncButton
+                    className="btn shrink-0 whitespace-nowrap text-[11px]"
+                    title="Copy this item into this machine's .claude folder"
+                    onClick={graftSelected}
+                  >
+                    ⬇ Install here
+                  </AsyncButton>
+                )}
+              </div>
             ) : (
-              <AsyncButton
-                className="btn-primary flex-1 whitespace-nowrap text-[11px]"
-                onClick={async () => {
-                  if (!navigator.onLine) {
-                    showToast("You're offline — reconnect to graft");
-                    return;
-                  }
-                  const r = await graftItem(selected);
-                  if (r === "ok") showToast(`🌱 ${selected.name} ${isOwn ? "installed on this machine" : "grafted onto your tree"}`);
-                  else if (r === "no-local") showToast("No local .claude folder to graft into");
-                  else if (r === "no-content") showToast("This item has no content to graft yet");
-                  else showToast("Graft failed — try again");
-                }}
-              >
-                {isOwn ? "⬇ Install here" : "🌱 Graft onto my tree"}
+              <AsyncButton className="btn-primary flex-1 whitespace-nowrap text-[11px]" onClick={graftSelected}>
+                🌱 Graft onto my tree
               </AsyncButton>
             )}
             <RequestChangesButton item={selected} />
