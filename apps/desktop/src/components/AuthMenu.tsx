@@ -45,7 +45,8 @@ export function AuthMenu() {
             {(profile?.handle ?? "?").slice(0, 2).toUpperCase()}
           </span>
         )}
-        <span className="flex items-center gap-1 text-xs text-muted">
+        {/* handle hides on phones to keep the header on one row; avatar remains */}
+        <span className="hidden items-center gap-1 text-xs text-muted sm:flex">
           @{profile?.handle ?? "…"}
           {!profile && <Spinner className="h-3 w-3" />}
         </span>

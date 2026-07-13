@@ -24,6 +24,7 @@ export interface ActiveGrant {
   itemId: string;
   granteeId: string;
   grantedBy: string;
+  granteeHandle?: string; // who holds the lock (shown to other viewers)
   expiresAt: string; // ISO — the countdown target (server clock)
 }
 
@@ -116,7 +117,10 @@ export async function refreshAccess(): Promise<void> {
       .select("id, requester_id, owner_id, toolkit_id, message, status, created_at, profiles!change_requests_requester_id_fkey(handle), change_request_items(item_id, toolkit_items(name))")
       .in("status", ["pending", "granted"])
       .order("created_at", { ascending: false }),
-    supabase.from("access_grants").select("id, item_id, grantee_id, granted_by, expires_at").is("revoked_at", null),
+    supabase
+      .from("access_grants")
+      .select("id, item_id, grantee_id, granted_by, expires_at, profiles!access_grants_grantee_id_fkey(handle)")
+      .is("revoked_at", null),
     supabase.from("notifications").select("*").order("created_at", { ascending: false }).limit(40),
   ]);
 
@@ -145,6 +149,7 @@ export async function refreshAccess(): Promise<void> {
         itemId: g.item_id as string,
         granteeId: g.grantee_id as string,
         grantedBy: g.granted_by as string,
+        granteeHandle: (g.profiles as { handle?: string } | null)?.handle,
         expiresAt: g.expires_at as string,
       });
     }

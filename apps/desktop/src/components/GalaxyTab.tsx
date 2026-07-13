@@ -62,7 +62,9 @@ function GrantStatus({ itemId, onEdit }: { itemId: string; onEdit?: () => void }
         mine ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300" : "border-amber-400/40 bg-amber-400/10 text-amber-300"
       }`}
     >
-      <span className="min-w-0 flex-1 truncate">{mine ? "🔓 Write window" : "🔒 Locked by another editor"}</span>
+      <span className="min-w-0 flex-1 truncate">
+        {mine ? "🔓 Write window" : `🔒 @${grant.granteeHandle ?? "someone"} is editing`}
+      </span>
       <span className="shrink-0 font-mono">{fmtCountdown(ms)}</span>
       {mine && onEdit && (
         <button

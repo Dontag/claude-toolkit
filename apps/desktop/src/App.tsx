@@ -223,9 +223,9 @@ export default function App() {
         {/* left: brand + tabs */}
         <img src={LOGO} alt="" className="h-6 w-6 shrink-0" />
         <span className="hidden text-sm font-bold tracking-tight sm:inline">Claude Galaxy</span>
-        <nav className="ml-1 flex shrink-0 gap-1">
-          {!IS_WEB && <TabButton id="personal" label="🌱 Personal" />}
-          <TabButton id="galaxy" label="🌌 Galaxy" />
+        <nav className="ml-0.5 flex shrink-0 gap-0.5 sm:ml-1 sm:gap-1">
+          {!IS_WEB && <TabButton id="personal" icon="🌱" text="Personal" />}
+          <TabButton id="galaxy" icon="🌌" text="Galaxy" />
         </nav>
 
         {/* search — its own full-width row at the BOTTOM on phones (order-last),
@@ -258,11 +258,11 @@ export default function App() {
         {tab === "personal" && mode === "local" && (
           <div className="flex shrink-0 items-center gap-2">
             <button
-              className="rounded-full border border-emerald-400/40 bg-black/30 px-3 py-1.5 text-[11px] text-emerald-300 transition hover:border-emerald-400"
+              className="rounded-full border border-emerald-400/40 bg-black/30 px-2.5 py-1.5 text-[11px] text-emerald-300 transition hover:border-emerald-400 sm:px-3"
               title="Add a skill, agent, command, hook or other Claude item to your tree"
               onClick={() => setAddOpen(true)}
             >
-              ✚ Add
+              ✚<span className="hidden sm:inline"> Add</span>
             </button>
             <RefreshButton onRefresh={rescanLocal} label="Rescan" />
           </div>
@@ -350,16 +350,19 @@ export default function App() {
   );
 }
 
-function TabButton({ id, label }: { id: "personal" | "galaxy"; label: string }) {
+function TabButton({ id, icon, text }: { id: "personal" | "galaxy"; icon: string; text: string }) {
   const active = useUi((s) => s.tab === id);
   return (
     <button
       onClick={() => useUi.getState().setTab(id)}
-      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+      title={text}
+      className={`rounded-lg px-2 py-1.5 text-xs font-medium transition sm:px-3 ${
         active ? "bg-brand/20 text-text" : "text-muted hover:bg-white/5 hover:text-text"
       }`}
     >
-      {label}
+      {/* label collapses to just the icon on phones so the header fits one row */}
+      <span>{icon}</span>
+      <span className="hidden sm:inline"> {text}</span>
     </button>
   );
 }
